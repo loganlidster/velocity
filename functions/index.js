@@ -4654,12 +4654,12 @@ async function executeWallet(userId, walletId) {
 // ============================================================================
 
 /**
- * Scheduled function that executes all enabled wallets every 5 seconds
+ * Scheduled function that executes all enabled wallets every 1 minute
  * This replaces the old 1-minute polling system
  */
 exports.executeWalletsRealtime = onSchedule(
   {
-    schedule: "every 5 seconds",
+    schedule: "every 1 minutes",
     timeZone: "America/New_York",
     secrets: ["pg-appuser-password"],
   },
