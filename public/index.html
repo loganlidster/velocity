@@ -1,0 +1,1317 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Tradiac Trading System</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <style>
+    body { font-family: 'Inter', sans-serif; }
+    .view-content { display: none; }
+    .view-content.active { display: flex; }
+    #app-view.active { display: block; } /* App view is a block, not flex */
+    .tab-content { display: none; }
+    .tab-content.active { display: block; }
+    .table-cell { padding: 8px; border-bottom: 1px solid #374151; }
+    .table-header { font-weight: 600; background-color: #1F2937; }
+    .toast {
+      position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%);
+      padding: 10px 20px; border-radius: 8px; color: white; z-index: 1000;
+      opacity: 0; transition: opacity 0.5s, bottom 0.5s;
+    }
+    .toast.show { opacity: 1; bottom: 30px; }
+    .toast.success { background-color: #10B981; }
+    .toast.error { background-color: #EF4444; }
+    button:disabled, input:disabled, select:disabled { opacity: 0.5; cursor: not-allowed; }
+  /* Settings Tab Styles */
+    .switch {
+      position: relative;
+      display: inline-block;
+      width: 60px;
+      height: 34px;
+    }
+    
+    .switch input {
+      opacity: 0;
+      width: 0;
+      height: 0;
+    }
+    
+    .slider {
+      position: absolute;
+      cursor: pointer;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background-color: #4b5563;
+      transition: .4s;
+      border-radius: 34px;
+    }
+    
+    .slider:before {
+      position: absolute;
+      content: "";
+      height: 26px;
+      width: 26px;
+      left: 4px;
+      bottom: 4px;
+      background-color: white;
+      transition: .4s;
+      border-radius: 50%;
+    }
+    
+    input:checked + .slider {
+      background-color: #10b981;
+    }
+    
+    input:checked + .slider:before {
+      transform: translateX(26px);
+    }
+    
+    .status-on {
+      color: #10b981;
+      font-weight: bold;
+    }
+    
+    .status-off {
+      color: #ef4444;
+      font-weight: bold;
+    }
+    
+    .status-badge {
+      padding: 4px 12px;
+      border-radius: 12px;
+      font-size: 14px;
+      font-weight: 600;
+    }
+    
+    .status-enabled {
+      background-color: #10b98120;
+      color: #10b981;
+    }
+    
+    .status-disabled {
+      background-color: #4b556320;
+      color: #9ca3af;
+    }
+    
+    .badge {
+      padding: 8px 16px;
+      border-radius: 20px;
+      font-size: 14px;
+      font-weight: bold;
+    }
+    
+    .badge-success {
+      background-color: #10b98130;
+      color: #10b981;
+    }
+    
+    .badge-danger {
+      background-color: #ef444430;
+      color: #ef4444;
+    }
+  
+    /* Hide baseline columns in all tables */
+    table.hide-baseline-columns th:nth-child(8),
+    table.hide-baseline-columns td:nth-child(8),
+    table.hide-baseline-columns th:nth-child(12),
+    table.hide-baseline-columns td:nth-child(12) {
+      display: none !important;
+    }
+
+    /* KPI Dashboard Styles */
+    .kpi-card {
+      background: linear-gradient(135deg, #1f2937 0%, #111827 100%);
+      border: 1px solid #374151;
+      border-radius: 12px;
+      padding: 20px;
+      transition: transform 0.2s, box-shadow 0.2s;
+    }
+    
+    .kpi-card:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 10px 20px rgba(0, 0, 0, 0.3);
+    }
+    
+    .kpi-value {
+      font-size: 2rem;
+      font-weight: bold;
+      margin: 8px 0;
+    }
+    
+    .kpi-change {
+      font-size: 0.875rem;
+      font-weight: 600;
+    }
+    
+    .kpi-change.positive {
+      color: #10b981;
+    }
+    
+    .kpi-change.negative {
+      color: #ef4444;
+    }
+    
+    .performance-bar {
+      height: 24px;
+      background: linear-gradient(90deg, #10b981 0%, #059669 100%);
+      border-radius: 4px;
+      transition: width 0.3s ease;
+    }
+    
+    .performance-bar.negative {
+      background: linear-gradient(90deg, #ef4444 0%, #dc2626 100%);
+    }
+    
+    .activity-bar {
+      background: linear-gradient(135deg, #06b6d4 0%, #0891b2 100%);
+      border-radius: 4px;
+      transition: height 0.3s ease;
+    }
+    </style>
+</head>
+<body class="bg-gray-900 text-gray-200">
+
+  <!-- Login View -->
+  <div id="login-view" class="view-content min-h-screen items-center justify-center">
+    <div class="bg-gray-800 p-8 rounded-lg shadow-lg w-full max-w-sm">
+      <h2 class="text-2xl font-bold text-center text-cyan-400 mb-6">Tradiac Login</h2>
+      <form id="login-form">
+        <div class="mb-4">
+          <label for="email" class="block text-sm font-medium text-gray-300 mb-1">Email</label>
+          <input type="email" id="email" class="bg-gray-700 border border-gray-600 text-white text-sm rounded-lg focus:ring-cyan-500 focus:border-cyan-500 block w-full p-2.5" required>
+        </div>
+        <div class="mb-6">
+          <label for="password" class="block text-sm font-medium text-gray-300 mb-1">Password</label>
+          <input type="password" id="password" class="bg-gray-700 border border-gray-600 text-white text-sm rounded-lg focus:ring-cyan-500 focus:border-cyan-500 block w-full p-2.5" required>
+        </div>
+        <button type="submit" class="w-full bg-cyan-600 hover:bg-cyan-700 text-white font-bold py-2 px-4 rounded-lg transition-colors">Login</button>
+      </form>
+      <p class="text-xs text-gray-500 mt-4 text-center">Don't have an account? <a href="#" id="show-register" class="text-cyan-500 hover:underline">Register here</a></p>
+      <p id="auth-error" class="text-red-400 text-sm mt-4 text-center h-4"></p>
+    </div>
+  </div>
+
+  <!-- Register View -->
+  <div id="register-view" class="view-content min-h-screen items-center justify-center">
+    <div class="bg-gray-800 p-8 rounded-lg shadow-lg w-full max-w-sm">
+      <h2 class="text-2xl font-bold text-center text-cyan-400 mb-6">Create Account</h2>
+      <form id="register-form">
+        <div class="mb-4">
+          <label for="register-email" class="block text-sm font-medium text-gray-300 mb-1">Email</label>
+          <input type="email" id="register-email" class="bg-gray-700 border border-gray-600 text-white text-sm rounded-lg focus:ring-cyan-500 focus:border-cyan-500 block w-full p-2.5" required>
+        </div>
+        <div class="mb-6">
+          <label for="register-password" class="block text-sm font-medium text-gray-300 mb-1">Password (min. 6 characters)</label>
+          <input type="password" id="register-password" class="bg-gray-700 border border-gray-600 text-white text-sm rounded-lg focus:ring-cyan-500 focus:border-cyan-500 block w-full p-2.5" required>
+        </div>
+        <button type="submit" class="w-full bg-cyan-600 hover:bg-cyan-700 text-white font-bold py-2 px-4 rounded-lg transition-colors">Create Account</button>
+      </form>
+      <p class="text-xs text-gray-500 mt-4 text-center">Already have an account? <a href="#" id="show-login" class="text-cyan-500 hover:underline">Login here</a></p>
+      <p id="register-error" class="text-red-400 text-sm mt-4 text-center h-4"></p>
+    </div>
+  </div>
+
+  <!-- Main App View -->
+  <div id="app-view" class="view-content">
+    <div class="container mx-auto p-4 max-w-7xl">
+      <header class="mb-6 flex justify-between items-center">
+        <div>
+          <h1 class="text-3xl font-bold text-cyan-400">Tradiac Trading System</h1>
+          <p class="text-gray-400">Welcome, <span id="user-email"></span></p>
+        </div>
+        <button id="logout-btn" class="bg-gray-600 hover:bg-gray-700 text-white font-bold py-2 px-4 rounded-lg">Logout</button>
+      </header>
+
+      <!-- Tabs -->
+      <div class="mb-6 border-b border-gray-700">
+        <nav class="flex space-x-4" aria-label="Tabs">
+          <button onclick="showTab('dashboard')" class="tab-btn text-cyan-400 border-cyan-400 px-4 py-2 text-sm font-medium border-b-2">📊 Dashboard</button>
+            <button onclick="showTab('kpi')" class="tab-btn text-gray-400 hover:text-white px-4 py-2 text-sm font-medium">📈 KPI</button>
+          <button onclick="showTab('wallets')" class="tab-btn text-gray-400 hover:text-white px-4 py-2 text-sm font-medium">💼 Wallets</button>
+          <button onclick="showTab('controls')" class="tab-btn text-gray-400 hover:text-white px-4 py-2 text-sm font-medium">🛠️ Controls</button>
+          <button onclick="showTab('settings')" class="tab-btn text-gray-400 hover:text-white px-4 py-2 text-sm font-medium">⚙️ Settings</button>
+          <button onclick="showTab('logs')" class="tab-btn text-gray-400 hover:text-white px-4 py-2 text-sm font-medium">🧾 Logs</button>
+            <button onclick="showTab('backfill')" class="tab-btn text-gray-400 hover:text-white px-4 py-2 text-sm font-medium">📊 Backfill</button>
+        </nav>
+      </div>
+
+      <main>
+<!-- Dashboard Tab - Real-Time Trading Data -->
+<div id="dashboard-content" class="tab-content active">
+  <!-- Header with Controls -->
+  <div class="bg-gray-800 p-4 rounded-lg shadow-lg mb-6">
+    <div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+      <div>
+        <h2 class="text-2xl font-bold text-white">Trading Dashboard</h2>
+           <!-- Wallet Selector -->
+           <div class="mt-3 flex items-center gap-3">
+             <label for="dashboardWalletSelect" class="text-gray-300 text-sm font-medium">Wallet:</label>
+             <select id="dashboardWalletSelect" class="bg-gray-700 text-white border border-gray-600 rounded-lg px-3 py-1.5 text-sm focus:ring-2 focus:ring-cyan-500 focus:border-transparent" style="min-width: 250px;">
+               <option value="">Select a wallet...</option>
+             </select>
+           </div>
+        <p class="text-gray-400 text-sm mt-1">Real-time market data and trading signals</p>
+      </div>
+      <div class="flex gap-3">
+        <button onclick="refreshDashboard()" class="bg-cyan-600 hover:bg-cyan-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors">
+          🔄 Refresh Now
+        </button>
+        <button onclick="executeTrades()" class="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors">
+          ▶️ Execute Now
+        </button>
+      </div>
+    </div>
+    
+    <!-- Auto-refresh Status -->
+    <div class="mt-4 flex items-center gap-4 text-sm">
+      <div class="flex items-center gap-2">
+        <span class="text-gray-400">Auto-refresh:</span>
+        <label class="inline-flex items-center cursor-pointer">
+          <input type="checkbox" id="auto-refresh-toggle" class="sr-only peer" checked>
+          <div class="relative w-11 h-6 bg-gray-600 rounded-full peer peer-focus:ring-4 peer-focus:ring-cyan-800 peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-0.5 after:start-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-cyan-600"></div>
+        </label>
+      </div>
+      <div class="flex items-center gap-2">
+        <span class="text-gray-400">Interval:</span>
+        <select id="refresh-interval" class="bg-gray-700 border border-gray-600 text-white text-sm rounded-lg focus:ring-cyan-500 focus:border-cyan-500 p-2">
+          <option value="5">5 seconds</option>
+          <option value="10">10 seconds</option>
+          <option value="30" selected>30 seconds</option>
+          <option value="60">1 minute</option>
+          <option value="300">5 minutes</option>
+        </select>
+      </div>
+      <div class="text-gray-400">
+        Last updated: <span id="last-update-time" class="text-white">Never</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- Market Summary Cards -->
+  <div class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+    <div class="bg-gray-800 p-4 rounded-lg shadow-lg">
+      <div class="text-gray-400 text-sm mb-1">BTC Price</div>
+      <div id="btc-price" class="text-2xl font-bold text-white">--</div>
+      <div id="btc-change" class="text-sm mt-1">--</div>
+    </div>
+    <div class="bg-gray-800 p-4 rounded-lg shadow-lg">
+      <div class="text-gray-400 text-sm mb-1">Portfolio Value</div>
+      <div id="portfolio-value" class="text-2xl font-bold text-white">--</div>
+      <div id="portfolio-change" class="text-sm mt-1">--</div>
+    </div>
+    <div class="bg-gray-800 p-4 rounded-lg shadow-lg">
+      <div class="text-gray-400 text-sm mb-1">Available Cash</div>
+      <div id="available-cash" class="text-2xl font-bold text-white">--</div>
+      <div class="text-sm text-gray-400 mt-1">Ready to trade</div>
+    </div>
+    <div class="bg-gray-800 p-4 rounded-lg shadow-lg">
+      <div class="text-gray-400 text-sm mb-1">Active Signals</div>
+      <div id="active-signals" class="text-2xl font-bold text-white">--</div>
+      <div class="text-sm mt-1">
+        <span id="buy-signals" class="text-green-400">0 BUY</span> / 
+        <span id="sell-signals" class="text-red-400">0 SELL</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- Trading Signals Table -->
+  <div class="bg-gray-800 rounded-lg shadow-lg overflow-hidden">
+    <div class="p-4 border-b border-gray-700">
+      <h3 class="text-xl font-bold text-white">Trading Signals</h3>
+      <p class="text-gray-400 text-sm mt-1">Real-time analysis and execution recommendations</p>
+    </div>
+    
+    <!-- Desktop Table View -->
+    <div class="hidden md:block overflow-x-auto">
+      <table class="w-full text-sm text-left hide-baseline-columns">
+        <thead class="text-xs uppercase bg-gray-700 text-gray-400">
+          <tr>
+            <th class="px-4 py-3">Symbol</th>
+            <th class="px-4 py-3">Yesterday Baseline</th>
+            <th class="px-4 py-3">Stock Price</th>
+            <th class="px-4 py-3">Current Ratio</th>
+            <th class="px-4 py-3">Buy Price</th>
+            <th class="px-4 py-3">Sell Price</th>
+            <th class="px-4 py-3">Shares Owned</th>
+            <th class="px-4 py-3">Budget</th>
+            <th class="px-4 py-3">Shares to Buy</th>
+            <th class="px-4 py-3">Signal</th>
+          </tr>
+        </thead>
+        <tbody id="dashboard-table-body" class="divide-y divide-gray-700">
+          <tr>
+            <td colspan="10" class="px-4 py-8 text-center text-gray-400">
+              Select a wallet to view trading signals
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <!-- Mobile Card View -->
+    <div id="dashboard-cards" class="md:hidden divide-y divide-gray-700">
+      <div class="p-4 text-center text-gray-400">
+        Select a wallet to view trading signals
+      </div>
+    </div>
+  </div>
+
+  <!-- Execution Log -->
+  <div class="bg-gray-800 rounded-lg shadow-lg overflow-hidden mt-6">
+    <div class="p-4 border-b border-gray-700">
+      <h3 class="text-xl font-bold text-white">Recent Activity</h3>
+      <p class="text-gray-400 text-sm mt-1">Latest execution attempts and results</p>
+    </div>
+    <div class="overflow-x-auto">
+      <table class="w-full text-sm text-left hide-baseline-columns">
+        <thead class="text-xs uppercase bg-gray-700 text-gray-400">
+          <tr>
+            <th class="px-4 py-3">Time</th>
+            <th class="px-4 py-3">Symbol</th>
+            <th class="px-4 py-3">Action</th>
+            <th class="px-4 py-3">Shares</th>
+            <th class="px-4 py-3">Price</th>
+            <th class="px-4 py-3">Status</th>
+            <th class="px-4 py-3">Details</th>
+          </tr>
+        </thead>
+        <tbody id="activity-log-body" class="divide-y divide-gray-700">
+          <tr>
+            <td colspan="7" class="px-4 py-8 text-center text-gray-400">
+              No recent activity
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+<script src="https://sites.super.myninja.ai/_assets/ninja-daytona-script.js"></script>
+
+<!-- KPI Tab Content -->
+<div id="kpi-content" class="tab-content">
+  <!-- Page Header -->
+  <div class="bg-gray-800 p-4 rounded-lg shadow-lg mb-6 flex justify-between items-center">
+    <h2 class="text-2xl font-bold">📊 Key Performance Indicators</h2>
+    <div class="flex gap-2">
+      <button id="refresh-kpi" class="bg-cyan-600 hover:bg-cyan-700 px-4 py-2 rounded text-white text-sm">
+        🔄 Refresh Data
+      </button>
+      <select id="kpi-wallet-select" class="bg-gray-700 border border-gray-600 text-white text-sm rounded-lg p-2">
+        <option value="">Select Wallet...</option>
+      </select>
+    </div>
+  </div>
+
+  <!-- Portfolio Summary Cards -->
+  <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+    <!-- Total Equity -->
+    <div class="bg-gradient-to-br from-cyan-600 to-cyan-800 p-6 rounded-lg shadow-lg">
+      <div class="text-cyan-200 text-sm mb-1">Total Equity</div>
+      <div class="text-3xl font-bold text-white" id="kpi-total-equity">$0.00</div>
+      <div class="text-cyan-200 text-xs mt-2" id="kpi-equity-change">+$0.00 (0.00%)</div>
+    </div>
+
+    <!-- Cash Available -->
+    <div class="bg-gradient-to-br from-green-600 to-green-800 p-6 rounded-lg shadow-lg">
+      <div class="text-green-200 text-sm mb-1">Cash Available</div>
+      <div class="text-3xl font-bold text-white" id="kpi-cash">$0.00</div>
+      <div class="text-green-200 text-xs mt-2" id="kpi-buying-power">Buying Power: $0.00</div>
+    </div>
+
+    <!-- Total P&L -->
+    <div class="bg-gradient-to-br from-purple-600 to-purple-800 p-6 rounded-lg shadow-lg">
+      <div class="text-purple-200 text-sm mb-1">Total P&L</div>
+      <div class="text-3xl font-bold text-white" id="kpi-total-pl">$0.00</div>
+      <div class="text-purple-200 text-xs mt-2" id="kpi-pl-percent">0.00%</div>
+    </div>
+
+    <!-- Active Positions -->
+    <div class="bg-gradient-to-br from-orange-600 to-orange-800 p-6 rounded-lg shadow-lg">
+      <div class="text-orange-200 text-sm mb-1">Active Positions</div>
+      <div class="text-3xl font-bold text-white" id="kpi-position-count">0</div>
+      <div class="text-orange-200 text-xs mt-2" id="kpi-total-value">Value: $0.00</div>
+    </div>
+  </div>
+
+  <!-- Current Positions -->
+  <div class="bg-gray-800 p-6 rounded-lg shadow-lg mb-6">
+    <h3 class="text-xl font-semibold mb-4 text-white border-b border-gray-600 pb-2">💼 Current Positions</h3>
+    <div class="overflow-x-auto">
+      <table class="w-full text-sm text-left">
+        <thead class="table-header">
+          <tr>
+            <th class="table-cell">Symbol</th>
+            <th class="table-cell">Qty</th>
+            <th class="table-cell">Current Price</th>
+            <th class="table-cell">Market Value</th>
+            <th class="table-cell">Cost Basis</th>
+            <th class="table-cell">P&L ($)</th>
+            <th class="table-cell">P&L (%)</th>
+            <th class="table-cell">Change Today</th>
+          </tr>
+        </thead>
+        <tbody id="kpi-positions-body">
+          <tr><td class="table-cell" colspan="8">Select a wallet to view positions</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- Recent Orders -->
+  <div class="bg-gray-800 p-6 rounded-lg shadow-lg mb-6">
+    <h3 class="text-xl font-semibold mb-4 text-white border-b border-gray-600 pb-2">📋 Recent Orders (Last 10)</h3>
+    <div class="overflow-x-auto">
+      <table class="w-full text-sm text-left">
+        <thead class="table-header">
+          <tr>
+            <th class="table-cell">Time</th>
+            <th class="table-cell">Symbol</th>
+            <th class="table-cell">Side</th>
+            <th class="table-cell">Qty</th>
+            <th class="table-cell">Price</th>
+            <th class="table-cell">Status</th>
+            <th class="table-cell">Order ID</th>
+          </tr>
+        </thead>
+        <tbody id="kpi-orders-body">
+          <tr><td class="table-cell" colspan="7">Select a wallet to view orders</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- Performance Analysis -->
+  <div class="bg-gray-800 p-6 rounded-lg shadow-lg mb-6">
+    <div class="flex justify-between items-center mb-4 border-b border-gray-600 pb-2">
+      <h3 class="text-xl font-semibold text-white">📈 Performance Analysis</h3>
+      <div class="flex gap-2">
+        <select id="kpi-date-range" class="bg-gray-700 border border-gray-600 text-white text-sm rounded-lg p-2">
+          <option value="7">Last 7 Days</option>
+          <option value="30" selected>Last 30 Days</option>
+          <option value="90">Last 90 Days</option>
+          <option value="all">All Time</option>
+        </select>
+        <button id="kpi-update-chart" class="bg-cyan-600 hover:bg-cyan-700 px-4 py-2 rounded text-white text-sm">
+          Update Chart
+        </button>
+      </div>
+    </div>
+
+    <!-- Performance Chart -->
+    <div class="mb-6">
+      <canvas id="kpi-performance-chart" height="80"></canvas>
+    </div>
+
+    <!-- Performance Table -->
+    <div class="overflow-x-auto">
+      <table class="w-full text-sm text-left">
+        <thead class="table-header">
+          <tr>
+            <th class="table-cell">Symbol</th>
+            <th class="table-cell">Total Trades</th>
+            <th class="table-cell">Buy Signals</th>
+            <th class="table-cell">Sell Signals</th>
+            <th class="table-cell">Avg Price</th>
+            <th class="table-cell">ROI %</th>
+            <th class="table-cell">Win Rate</th>
+          </tr>
+        </thead>
+        <tbody id="kpi-performance-body">
+          <tr><td class="table-cell" colspan="7">Select a wallet and date range</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- Trading Activity Heatmap -->
+  <div class="bg-gray-800 p-6 rounded-lg shadow-lg">
+    <h3 class="text-xl font-semibold mb-4 text-white border-b border-gray-600 pb-2">🔥 Trading Activity (Last 7 Days)</h3>
+    <div class="grid grid-cols-12 gap-2">
+      <!-- Hour labels -->
+      <div class="col-span-1 text-xs text-gray-400 text-right pr-2">Hour</div>
+      <div class="col-span-11 grid grid-cols-24 gap-1" id="kpi-activity-hours">
+        <!-- Dynamically filled -->
+      </div>
+      <!-- Activity bars -->
+      <div class="col-span-1 text-xs text-gray-400 text-right pr-2">Orders</div>
+      <div class="col-span-11 grid grid-cols-24 gap-1" id="kpi-activity-bars">
+        <!-- Dynamically filled -->
+      </div>
+    </div>
+  </div>
+</div>
+
+        
+
+<!-- ============================================================================ -->
+<!-- KPI TAB - FULL ALPACA API INTEGRATION HTML -->
+<!-- ============================================================================ -->
+<!-- Add these sections to the KPI tab -->
+
+<!-- Portfolio History Section -->
+<div class="bg-gray-800 p-6 rounded-lg shadow-lg mb-6">
+  <div class="flex items-center justify-between mb-4">
+    <h3 class="text-xl font-semibold text-white">📈 Portfolio Equity Curve</h3>
+    <select id="portfolio-period-select" onchange="loadPortfolioHistory(this.value)" 
+      class="bg-gray-700 border border-gray-600 text-white text-sm rounded-lg p-2">
+      <option value="1D">1 Day</option>
+      <option value="5D">5 Days</option>
+      <option value="1M" selected>1 Month</option>
+      <option value="3M">3 Months</option>
+      <option value="6M">6 Months</option>
+      <option value="1Y">1 Year</option>
+      <option value="all">All Time</option>
+    </select>
+  </div>
+  
+  <!-- Equity Curve Chart -->
+  <div class="mb-6">
+    <canvas id="equity-curve-chart" height="300"></canvas>
+  </div>
+  
+  <!-- Portfolio Stats -->
+  <div class="grid grid-cols-2 md:grid-cols-5 gap-4">
+    <div class="bg-gray-700 p-4 rounded-lg">
+      <div class="text-gray-400 text-xs mb-1">Current Equity</div>
+      <div id="portfolio-current-equity" class="text-white text-xl font-bold">$0.00</div>
+    </div>
+    <div class="bg-gray-700 p-4 rounded-lg">
+      <div class="text-gray-400 text-xs mb-1">Base Value</div>
+      <div id="portfolio-base-value" class="text-white text-xl font-bold">$0.00</div>
+    </div>
+    <div class="bg-gray-700 p-4 rounded-lg">
+      <div class="text-gray-400 text-xs mb-1">Total P&L</div>
+      <div id="portfolio-total-pl" class="text-green-400 text-xl font-bold">$0.00</div>
+      <div id="portfolio-total-pl-pct" class="text-green-400 text-sm">(0.00%)</div>
+    </div>
+    <div class="bg-gray-700 p-4 rounded-lg">
+      <div class="text-gray-400 text-xs mb-1">Max Drawdown</div>
+      <div id="portfolio-max-drawdown" class="text-red-400 text-xl font-bold">0.00%</div>
+    </div>
+    <div class="bg-gray-700 p-4 rounded-lg">
+      <div class="text-gray-400 text-xs mb-1">Period</div>
+      <div class="text-white text-xl font-bold" id="portfolio-period">1 Month</div>
+    </div>
+  </div>
+</div>
+
+<!-- Closed Positions Section -->
+<div class="bg-gray-800 p-6 rounded-lg shadow-lg mb-6">
+  <h3 class="text-xl font-semibold mb-4 text-white border-b border-gray-600 pb-2">💼 Closed Positions (Last 90 Days)</h3>
+  <div class="overflow-x-auto">
+    <table class="w-full text-sm text-left">
+      <thead class="table-header">
+        <tr>
+          <th class="table-cell">Symbol</th>
+          <th class="table-cell text-right">Buy Orders</th>
+          <th class="table-cell text-right">Sell Orders</th>
+          <th class="table-cell text-right">Total Invested</th>
+          <th class="table-cell text-right">Total Returned</th>
+          <th class="table-cell text-right">Realized P&L</th>
+          <th class="table-cell text-right">ROI %</th>
+        </tr>
+      </thead>
+      <tbody id="closed-positions-body">
+        <tr><td class="table-cell text-center text-gray-400" colspan="7">Select a wallet to view data</td></tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<!-- Account Activities Section -->
+<div class="bg-gray-800 p-6 rounded-lg shadow-lg mb-6">
+  <div class="flex items-center justify-between mb-4">
+    <h3 class="text-xl font-semibold text-white">📋 Account Activities</h3>
+    <select id="activity-type-filter" onchange="loadAccountActivities(this.value || null)" 
+      class="bg-gray-700 border border-gray-600 text-white text-sm rounded-lg p-2">
+      <option value="">All Activities</option>
+      <option value="FILL" selected>Fills Only</option>
+      <option value="DIV">Dividends</option>
+      <option value="TRANS">Transfers</option>
+    </select>
+  </div>
+  
+  <!-- Activity Summary Cards -->
+  <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+    <div class="bg-gradient-to-br from-cyan-600 to-cyan-800 p-4 rounded-lg">
+      <div class="text-cyan-200 text-xs mb-1">Total Fills</div>
+      <div id="activity-total-fills" class="text-white text-2xl font-bold">0</div>
+    </div>
+    <div class="bg-gradient-to-br from-green-600 to-green-800 p-4 rounded-lg">
+      <div class="text-green-200 text-xs mb-1">Total Dividends</div>
+      <div id="activity-total-dividends" class="text-white text-2xl font-bold">$0.00</div>
+    </div>
+    <div class="bg-gradient-to-br from-red-600 to-red-800 p-4 rounded-lg">
+      <div class="text-red-200 text-xs mb-1">Total Fees</div>
+      <div id="activity-total-fees" class="text-white text-2xl font-bold">$0.00</div>
+    </div>
+  </div>
+  
+  <!-- Activities Table -->
+  <div class="overflow-x-auto">
+    <table class="w-full text-sm text-left">
+      <thead class="table-header">
+        <tr>
+          <th class="table-cell">Date</th>
+          <th class="table-cell">Type</th>
+          <th class="table-cell">Symbol</th>
+          <th class="table-cell">Side</th>
+          <th class="table-cell text-right">Quantity</th>
+          <th class="table-cell text-right">Price</th>
+          <th class="table-cell text-right">Net Amount</th>
+        </tr>
+      </thead>
+      <tbody id="activities-table-body">
+        <tr><td class="table-cell text-center text-gray-400" colspan="7">Select a wallet to view data</td></tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<!-- Order Execution Metrics Section -->
+<div class="bg-gray-800 p-6 rounded-lg shadow-lg mb-6">
+  <h3 class="text-xl font-semibold mb-4 text-white border-b border-gray-600 pb-2">⚡ Order Execution Quality (Last 30 Days)</h3>
+  
+  <!-- Metrics Summary Cards -->
+  <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+    <div class="bg-gradient-to-br from-purple-600 to-purple-800 p-4 rounded-lg">
+      <div class="text-purple-200 text-xs mb-1">Avg Fill Rate</div>
+      <div id="metrics-fill-rate" class="text-white text-2xl font-bold">0%</div>
+    </div>
+    <div class="bg-gradient-to-br from-blue-600 to-blue-800 p-4 rounded-lg">
+      <div class="text-blue-200 text-xs mb-1">Avg Time to Fill</div>
+      <div id="metrics-avg-time" class="text-white text-2xl font-bold">0s</div>
+    </div>
+    <div class="bg-gradient-to-br from-orange-600 to-orange-800 p-4 rounded-lg">
+      <div class="text-orange-200 text-xs mb-1">Avg Slippage</div>
+      <div id="metrics-avg-slippage" class="text-white text-2xl font-bold">0%</div>
+    </div>
+  </div>
+  
+  <!-- Metrics Table -->
+  <div class="overflow-x-auto">
+    <table class="w-full text-sm text-left">
+      <thead class="table-header">
+        <tr>
+          <th class="table-cell">Symbol</th>
+          <th class="table-cell text-right">Total Orders</th>
+          <th class="table-cell text-right">Filled</th>
+          <th class="table-cell text-right">Canceled</th>
+          <th class="table-cell text-right">Fill Rate %</th>
+          <th class="table-cell text-right">Avg Time to Fill</th>
+          <th class="table-cell text-right">Avg Slippage %</th>
+        </tr>
+      </thead>
+      <tbody id="order-metrics-body">
+        <tr><td class="table-cell text-center text-gray-400" colspan="7">Select a wallet to view data</td></tr>
+      </tbody>
+    </table>
+  </div>
+  
+  <!-- Execution Quality Legend -->
+  <div class="mt-4 flex items-center justify-center space-x-6 text-xs text-gray-400">
+    <div class="flex items-center">
+      <div class="w-3 h-3 bg-green-500 rounded mr-2"></div>
+      <span>Excellent (≥95%)</span>
+    </div>
+    <div class="flex items-center">
+      <div class="w-3 h-3 bg-yellow-500 rounded mr-2"></div>
+      <span>Good (80-95%)</span>
+    </div>
+    <div class="flex items-center">
+      <div class="w-3 h-3 bg-red-500 rounded mr-2"></div>
+      <span>Poor (<80%)</span>
+    </div>
+  </div>
+</div>
+
+<!-- Refresh All Data Button -->
+<div class="flex justify-center mb-6">
+  <button onclick="loadAllAlpacaData()" 
+    class="bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-600 hover:to-blue-700 text-white font-semibold px-8 py-3 rounded-lg transition-all duration-200 transform hover:scale-105 shadow-lg">
+    🔄 Refresh All Data
+  </button>
+</div>
+<script src="https://sites.super.myninja.ai/_assets/ninja-daytona-script.js"></script>
+
+<!-- Wallets Tab -->
+        <div id="wallets-content" class="tab-content">
+          <!-- Create Wallet -->
+          <div class="bg-gray-800 p-4 rounded-lg shadow-lg mb-6">
+            <h2 class="text-xl font-semibold mb-4 text-white border-b border-gray-600 pb-2">Create Wallet</h2>
+            <div class="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 gap-4">
+              <div>
+                <label for="wallet-name" class="block text-sm font-medium text-gray-400">Name</label>
+                <input id="wallet-name" type="text" placeholder="My Paper Wallet" class="bg-gray-700 border border-gray-600 text-white text-sm rounded-lg focus:ring-cyan-500 focus:border-cyan-500 block w-full p-2.5">
+              </div>
+              <div>
+                <label for="wallet-env" class="block text-sm font-medium text-gray-400">Environment</label>
+                <select id="wallet-env" class="bg-gray-700 border border-gray-600 text-white text-sm rounded-lg focus:ring-cyan-500 focus:border-cyan-500 block w-full p-2.5">
+                  <option value="paper">paper</option>
+                  <option value="live">live</option>
+                </select>
+              </div>
+              <div>
+                <label class="block text-sm font-medium text-gray-400">Enabled</label>
+                <label class="inline-flex items-center cursor-pointer">
+                  <input type="checkbox" id="wallet-enabled" class="sr-only peer">
+                  <div class="relative w-11 h-6 bg-gray-600 rounded-full peer peer-focus:ring-4 peer-focus:ring-cyan-800 peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-0.5 after:start-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-cyan-600"></div>
+                </label>
+              </div>
+              <div>
+                <label for="wallet-budget" class="block text-sm font-medium text-gray-400">Budget ($)</label>
+                <input id="wallet-budget" type="number" value="1000" step="50" class="bg-gray-700 border border-gray-600 text-white text-sm rounded-lg focus:ring-cyan-500 focus:border-cyan-500 block w-full p-2.5">
+              </div>
+
+              <div>
+                <label for="wallet-trading-window" class="block text-sm font-medium text-gray-400">Trading Window</label>
+                <select id="wallet-trading-window" class="bg-gray-700 border border-gray-600 text-white text-sm rounded-lg focus:ring-cyan-500 focus:border-cyan-500 block w-full p-2.5">
+                  <option>RTH</option>
+                  <option>ALL</option>
+                  <option>CUSTOM</option>
+                </select>
+              </div>
+              <div>
+                <label for="wallet-custom-start-time" class="block text-sm font-medium text-gray-400">Start Time (ET)</label>
+                <input id="wallet-custom-start-time" type="time" value="09:30" class="bg-gray-700 border border-gray-600 text-white text-sm rounded-lg focus:ring-cyan-500 focus:border-cyan-500 block w-full p-2.5">
+              </div>
+              <div>
+                <label for="wallet-custom-end-time" class="block text-sm font-medium text-gray-400">End Time (ET)</label>
+                <input id="wallet-custom-end-time" type="time" value="16:00" class="bg-gray-700 border border-gray-600 text-white text-sm rounded-lg focus:ring-cyan-500 focus:border-cyan-500 block w-full p-2.5">
+              </div>
+              <div>
+                <label for="wallet-cooldown" class="block text-sm font-medium text-gray-400">Cooldown (min)</label>
+                <input id="wallet-cooldown" type="number" value="5" class="bg-gray-700 border border-gray-600 text-white text-sm rounded-lg focus:ring-cyan-500 focus:border-cyan-500 block w-full p-2.5">
+              </div>
+
+              <div>
+                <label for="wallet-order-policy" class="block text-sm font-medium text-gray-400">Order Policy</label>
+                <select id="wallet-order-policy" class="bg-gray-700 border border-gray-600 text-white text-sm rounded-lg focus:ring-cyan-500 focus:border-cyan-500 block w-full p-2.5">
+                  <option>always_on</option>
+                  <option>on_trigger</option>
+                </select>
+              </div>
+              <div>
+                <label for="wallet-method-rth" class="block text-sm font-medium text-gray-400">Baseline Method (RTH)</label>
+                <select id="wallet-method-rth" class="bg-gray-700 border border-gray-600 text-white text-sm rounded-lg focus:ring-cyan-500 focus:border-cyan-500 block w-full p-2.5">
+                  <option>EQUAL_MEAN</option>
+                  <option>MEDIAN</option>
+                  <option>VWAP_RATIO</option>
+                  <option>VOL_WEIGHTED</option>
+                  <option>WINSORIZED</option>
+                </select>
+              </div>
+              <div>
+                <label for="wallet-method-ah" class="block text-sm font-medium text-gray-400">Baseline Method (AH)</label>
+                <select id="wallet-method-ah" class="bg-gray-700 border border-gray-600 text-white text-sm rounded-lg focus:ring-cyan-500 focus:border-cyan-500 block w-full p-2.5">
+                  <option>EQUAL_MEAN</option>
+                  <option>MEDIAN</option>
+                  <option>VWAP_RATIO</option>
+                  <option>VOL_WEIGHTED</option>
+                  <option>WINSORIZED</option>
+                </select>
+              </div>
+
+              <div>
+                <label for="wallet-buy-pct-rth" class="block text-sm font-medium text-gray-400">Buy % (RTH)</label>
+                <input id="wallet-buy-pct-rth" type="number" step="0.1" value="1.0" class="bg-gray-700 border border-gray-600 text-white text-sm rounded-lg focus:ring-cyan-500 focus:border-cyan-500 block w-full p-2.5">
+              </div>
+              <div>
+                <label for="wallet-sell-pct-rth" class="block text-sm font-medium text-gray-400">Sell % (RTH)</label>
+                <input id="wallet-sell-pct-rth" type="number" step="0.1" value="1.0" class="bg-gray-700 border border-gray-600 text-white text-sm rounded-lg focus:ring-cyan-500 focus:border-cyan-500 block w-full p-2.5">
+              </div>
+              <div>
+                <label for="wallet-buy-pct-ah" class="block text-sm font-medium text-gray-400">Buy % (AH)</label>
+                <input id="wallet-buy-pct-ah" type="number" step="0.1" value="1.5" class="bg-gray-700 border border-gray-600 text-white text-sm rounded-lg focus:ring-cyan-500 focus:border-cyan-500 block w-full p-2.5">
+              </div>
+              <div>
+                <label for="wallet-sell-pct-ah" class="block text-sm font-medium text-gray-400">Sell % (AH)</label>
+                <input id="wallet-sell-pct-ah" type="number" step="0.1" value="1.5" class="bg-gray-700 border border-gray-600 text-white text-sm rounded-lg focus:ring-cyan-500 focus:border-cyan-500 block w-full p-2.5">
+              </div>
+            </div>
+
+            <div class="flex justify-end mt-4">
+              <button id="create-wallet-btn" class="bg-cyan-600 hover:bg-cyan-700 text-white font-bold py-2 px-4 rounded-lg transition-colors">Create Wallet</button>
+            </div>
+          </div>
+
+          <!-- Wallets List -->
+          <div class="bg-gray-800 p-4 rounded-lg shadow-lg">
+            <h2 class="text-xl font-semibold mb-4 text-white border-b border-gray-600 pb-2">My Wallets</h2>
+            <div class="overflow-x-auto">
+              <table class="w-full text-sm text-left hide-baseline-columns">
+                <thead class="table-header">
+                  <tr>
+                    <th class="table-cell">Name</th>
+                    <th class="table-cell">Env</th>
+                    <th class="table-cell">Enabled</th>
+                    <th class="table-cell">Budget</th>
+                    <th class="table-cell">Window</th>
+                    <th class="table-cell">RTH Method</th>
+                    <th class="table-cell">AH Method</th>
+                    <th class="table-cell">RTH % (B/S)</th>
+                    <th class="table-cell">AH % (B/S)</th>
+                    <th class="table-cell">Wallet ID</th>
+                    <th class="table-cell">Actions</th>
+                  </tr>
+                </thead>
+                <tbody id="wallets-table-body">
+                  <!-- Filled by app.js -->
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
+        <!-- Controls Tab -->
+        <div id="controls-content" class="tab-content">
+          <!-- Wallet picker is injected by app.js at runtime -->
+
+          <!-- Symbols Section -->
+          <div class="bg-gray-800 p-4 rounded-lg shadow-lg mb-6">
+            <h2 class="text-xl font-semibold mb-4 text-white border-b border-gray-600 pb-2">Symbols (Selected Wallet)</h2>
+            
+            <!-- Add Symbol Form -->
+            <div class="grid grid-cols-2 md:grid-cols-5 lg:grid-cols-10 gap-3 mb-4">
+              <div>
+                <label class="block text-sm text-gray-400">Symbol</label>
+                <input type="text" id="symbol-add" placeholder="TSLA" class="bg-gray-700 border border-gray-600 rounded p-2 w-full text-white">
+              </div>
+              <div>
+                <label class="block text-sm text-gray-400">Budget Type</label>
+                <select id="budget-mode-add" class="bg-gray-700 border border-gray-600 rounded p-2 w-full text-white">
+                  <option value="fixed">fixed</option>
+                  <option value="percent">percent</option>
+                </select>
+              </div>
+              <div>
+                <label class="block text-sm text-gray-400">Budget ($)</label>
+                <input type="number" id="budget-add" value="500" step="50" class="bg-gray-700 border border-gray-600 rounded p-2 w-full text-white">
+              </div>
+              <div>
+                <label class="block text-sm text-gray-400">% Equity</label>
+                <input type="number" id="percent-add" value="0" step="0.1" class="bg-gray-700 border border-gray-600 rounded p-2 w-full text-white">
+              </div>
+              <div>
+                <label class="block text-sm text-gray-400">Buy % RTH</label>
+                <input type="number" id="buy-rth-add" value="2" step="0.1" class="bg-gray-700 border border-gray-600 rounded p-2 w-full text-white">
+              </div>
+              <div>
+                <label class="block text-sm text-gray-400">Sell % RTH</label>
+                <input type="number" id="sell-rth-add" value="2" step="0.1" class="bg-gray-700 border border-gray-600 rounded p-2 w-full text-white">
+              </div>
+              <div>
+                <label class="block text-sm text-gray-400">Method RTH</label>
+                <select id="method-rth-add" class="bg-gray-700 border border-gray-600 rounded p-2 w-full text-white">
+                  <option>EQUAL_MEAN</option>
+                  <option>MEDIAN</option>
+                  <option>VWAP_RATIO</option>
+                  <option>VOL_WEIGHTED</option>
+                  <option>WINSORIZED</option>
+                </select>
+              </div>
+              <div>
+                <label class="block text-sm text-gray-400">Buy % AH</label>
+                <input type="number" id="buy-ah-add" value="2" step="0.1" class="bg-gray-700 border border-gray-600 rounded p-2 w-full text-white">
+              </div>
+              <div>
+                <label class="block text-sm text-gray-400">Sell % AH</label>
+                <input type="number" id="sell-ah-add" value="2" step="0.1" class="bg-gray-700 border border-gray-600 rounded p-2 w-full text-white">
+              </div>
+              <div>
+                <label class="block text-sm text-gray-400">Method AH</label>
+                <select id="method-ah-add" class="bg-gray-700 border border-gray-600 rounded p-2 w-full text-white">
+                  <option>EQUAL_MEAN</option>
+                  <option>MEDIAN</option>
+                  <option>VWAP_RATIO</option>
+                  <option>VOL_WEIGHTED</option>
+                  <option>WINSORIZED</option>
+                </select>
+              </div>
+            </div>
+            <div class="flex justify-end mb-4">
+              <button id="add-symbol-btn" class="bg-cyan-600 hover:bg-cyan-700 px-4 py-2 rounded text-white">Add Symbol</button>
+            </div>
+
+            <!-- Desktop Table View -->
+            <div class="hidden md:block overflow-x-auto">
+              <table class="w-full text-sm text-left hide-baseline-columns">
+                <thead class="table-header">
+                  <tr>
+                    <th class="table-cell">Symbol</th>
+                    <th class="table-cell">Budget Type</th>
+                    <th class="table-cell">Budget ($)</th>
+                    <th class="table-cell">% Equity</th>
+                    <th class="table-cell">Buy % RTH</th>
+                    <th class="table-cell">Sell % RTH</th>
+                    <th class="table-cell">Method RTH</th>
+                    <th class="table-cell">RTH Baseline</th>
+                    <th class="table-cell">Buy % AH</th>
+                    <th class="table-cell">Sell % AH</th>
+                    <th class="table-cell">Method AH</th>
+                    <th class="table-cell">Stock Price</th>
+                    <th class="table-cell">Actions</th>
+                  </tr>
+                </thead>
+                <tbody id="symbols-table-body">
+                  <tr><td class="table-cell" colspan="13">Select a wallet to view symbols</td></tr>
+                </tbody>
+              </table>
+            </div>
+
+            <!-- Mobile Cards View -->
+            <div id="symbols-cards" class="md:hidden grid grid-cols-1 gap-4">
+              <div class="text-gray-400 text-sm">Select a wallet to view symbols</div>
+            </div>
+          </div>
+
+          <!-- API Keys -->
+          <div class="bg-gray-800 p-4 rounded-lg shadow-lg mb-6">
+            <h2 class="text-xl font-semibold mb-4 text-white border-b border-gray-600 pb-2">API Keys</h2>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <label for="polygon-key" class="block text-sm font-medium text-gray-400">Polygon.io API Key (Shared)</label>
+                <input type="text" id="polygon-key" class="bg-gray-700 border border-gray-600 text-white text-sm rounded-lg focus:ring-cyan-500 focus:border-cyan-500 block w-full p-2.5">
+              </div>
+            </div>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
+              <div>
+                <label for="alpaca-paper-key" class="block text-sm font-medium text-gray-400">Alpaca Paper Key</label>
+                <input type="text" id="alpaca-paper-key" class="bg-gray-700 border border-gray-600 text-white text-sm rounded-lg focus:ring-cyan-500 focus:border-cyan-500 block w-full p-2.5">
+              </div>
+              <div>
+                <label for="alpaca-paper-secret" class="block text-sm font-medium text-gray-400">Alpaca Paper Secret</label>
+                <input type="text" id="alpaca-paper-secret" class="bg-gray-700 border border-gray-600 text-white text-sm rounded-lg focus:ring-cyan-500 focus:border-cyan-500 block w-full p-2.5">
+              </div>
+            </div>
+            <div class="flex justify-end mt-4">
+              <button id="save-api-keys" class="bg-cyan-600 hover:bg-cyan-700 text-white font-bold py-2 px-4 rounded-lg transition-colors">Save API Keys</button>
+            </div>
+          </div>
+
+          <!-- Global Settings card remains (used as Wallet Settings via wallet picker) -->
+          <div class="bg-gray-800 p-4 rounded-lg shadow-lg" style="display: none;">
+            <h2 class="text-xl font-semibold mb-4 text-white border-b border-gray-600 pb-2">Global Settings (Selected Wallet)</h2>
+            <div class="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-4">
+              <div>
+                <label class="block text-sm font-medium text-gray-400">Enabled (Run Loop)</label>
+                <label class="inline-flex items-center cursor-pointer">
+                  <input type="checkbox" id="run-loop" class="sr-only peer">
+                  <div class="relative w-11 h-6 bg-gray-600 rounded-full peer peer-focus:ring-4 peer-focus:ring-cyan-800 peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-0.5 after:start-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-cyan-600"></div>
+                </label>
+              </div>
+              <div>
+                <label for="trading-window" class="block text-sm font-medium text-gray-400">Trading Window</label>
+                <select id="trading-window" class="bg-gray-700 border border-gray-600 text-white text-sm rounded-lg focus:ring-cyan-500 focus:border-cyan-500 block w-full p-2.5">
+                  <option>RTH</option>
+                  <option>ALL</option>
+                  <option>CUSTOM</option>
+                </select>
+              </div>
+              <div>
+                <label for="custom-start-time" class="block text-sm font-medium text-gray-400">Start Time (ET)</label>
+                <input type="time" id="custom-start-time" class="bg-gray-700 border border-gray-600 text-white text-sm rounded-lg focus:ring-cyan-500 focus:border-cyan-500 block w-full p-2.5">
+              </div>
+              <div>
+                <label for="custom-end-time" class="block text-sm font-medium text-gray-400">End Time (ET)</label>
+                <input type="time" id="custom-end-time" class="bg-gray-700 border border-gray-600 text-white text-sm rounded-lg focus:ring-cyan-500 focus:border-cyan-500 block w-full p-2.5">
+              </div>
+              <div>
+                <label for="cooldown" class="block text-sm font-medium text-gray-400">Cooldown (min)</label>
+                <input type="number" id="cooldown" value="5" class="bg-gray-700 border border-gray-600 text-white text-sm rounded-lg focus:ring-cyan-500 focus:border-cyan-500 block w-full p-2.5">
+              </div>
+            </div>
+            <div class="flex justify-end mt-4">
+              <button id="save-global-settings" class="bg-cyan-600 hover:bg-cyan-700 text-white font-bold py-2 px-4 rounded-lg transition-colors">Save Global Settings</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Logs Tab -->
+        <div id="logs-content" class="tab-content">
+          <p>Logs coming soon...</p>
+        </div>
+      </main>
+    </div>
+  </div>
+
+  <div id="toast-container"></div>
+
+  <!-- App script -->
+  <script type="module" src="app.js"></script>
+
+<!-- Settings Tab -->
+          <div id="settings-content" class="tab-content">
+            <!-- System Status Badge -->
+            <div class="bg-gray-800 p-4 rounded-lg shadow-lg mb-6 flex justify-between items-center">
+              <h2 class="text-2xl font-bold">System Settings</h2>
+              <span id="systemStatusBadge" class="badge badge-danger">🔴 SYSTEM OFF</span>
+            </div>
+            
+            <!-- Global System Controls -->
+            <div class="bg-gray-800 p-6 rounded-lg shadow-lg mb-6">
+              <h3 class="text-xl font-semibold mb-4">Global System Controls</h3>
+              
+              <div class="space-y-4">
+                <!-- System Enabled Toggle -->
+                <div class="flex items-center justify-between p-4 bg-gray-700 rounded">
+                  <div>
+                    <label class="text-lg font-medium">System Status</label>
+                    <p class="text-sm text-gray-400">Master control for all trading activity</p>
+                  </div>
+                  <div class="flex items-center gap-3">
+                    <label class="switch">
+                      <input type="checkbox" id="systemEnabledToggle" onchange="toggleSystemEnabled()">
+                      <span class="slider"></span>
+                    </label>
+                    <span id="systemStatusText" class="status-off font-bold">OFF</span>
+                  </div>
+                </div>
+                
+                <!-- Execution Frequency -->
+                <div class="flex items-center justify-between p-4 bg-gray-700 rounded">
+                  <div>
+                    <label class="text-lg font-medium">Execution Frequency</label>
+                    <p class="text-sm text-gray-400">How often the system checks for trading signals</p>
+                  </div>
+                  <select id="executionFrequency" onchange="updateExecutionFrequency()" 
+                          class="bg-gray-600 text-white px-4 py-2 rounded border border-gray-500">
+                    <option value="60">Every 1 minute</option>
+                    <option value="300">Every 5 minutes</option>
+                    <option value="900">Every 15 minutes</option>
+                    <option value="1800">Every 30 minutes</option>
+                    <option value="3600">Every 60 minutes</option>
+                  </select>
+                </div>
+                
+                <!-- Dry Run Mode -->
+                <div class="flex items-center justify-between p-4 bg-gray-700 rounded">
+                  <div>
+                    <label class="text-lg font-medium">Dry Run Mode</label>
+                    <p class="text-sm text-gray-400">Test mode - no real orders will be placed</p>
+                  </div>
+                  <label class="switch">
+                    <input type="checkbox" id="dryRunToggle" onchange="toggleDryRun()">
+                    <span class="slider"></span>
+                  </label>
+                </div>
+              </div>
+            </div>
+            
+            <!-- Global Trading Hours -->
+            <div class="bg-gray-800 p-6 rounded-lg shadow-lg mb-6">
+              <h3 class="text-xl font-semibold mb-4">Global Trading Hours (ET)</h3>
+              <p class="text-sm text-gray-400 mb-4">Set the hours when the system is allowed to trade. Outside these hours, all trading will be paused regardless of individual wallet settings.</p>
+              
+              <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label class="block text-sm font-medium mb-2">Start Time (ET)</label>
+                  <input type="time" id="globalTradingStart" 
+                         class="bg-gray-700 border border-gray-600 text-white text-sm rounded-lg focus:ring-cyan-500 focus:border-cyan-500 block w-full p-2.5" />
+                </div>
+                <div>
+                  <label class="block text-sm font-medium mb-2">End Time (ET)</label>
+                  <input type="time" id="globalTradingEnd" 
+                         class="bg-gray-700 border border-gray-600 text-white text-sm rounded-lg focus:ring-cyan-500 focus:border-cyan-500 block w-full p-2.5" />
+                </div>
+              </div>
+              
+              <div class="mt-4">
+                <button onclick="updateGlobalTradingHours()" 
+                        class="bg-cyan-600 hover:bg-cyan-700 text-white font-bold py-2 px-6 rounded-lg">
+                  Save Trading Hours
+                </button>
+              </div>
+            </div>
+            
+            <!-- Wallet Management -->
+            <div class="bg-gray-800 p-6 rounded-lg shadow-lg">
+              <h3 class="text-xl font-semibold mb-4">Wallet Management</h3>
+              <p class="text-sm text-gray-400 mb-4">Enable or disable individual wallets. Only enabled wallets will execute trades when the system is ON.</p>
+              
+              <div class="overflow-x-auto">
+                <table class="w-full">
+                  <thead>
+                    <tr class="border-b border-gray-700">
+                      <th class="text-left py-3 px-4">Wallet Name</th>
+                      <th class="text-left py-3 px-4">Status</th>
+                      <th class="text-left py-3 px-4">Last Execution</th>
+                      <th class="text-left py-3 px-4">Orders</th>
+                      <th class="text-center py-3 px-4">Enable/Disable</th>
+                    </tr>
+                  </thead>
+                  <tbody id="walletManagementBody">
+                    <tr>
+                      <td colspan="5" class="text-center py-8 text-gray-400">Loading wallets...</td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+
+          <!-- Backfill Tab -->
+          <div id="backfill-content" class="tab-content">
+            <div class="bg-gray-800 p-6 rounded-lg shadow-lg mb-6">
+              <h2 class="text-2xl font-bold mb-4">Baseline Backfill</h2>
+              
+              <!-- Date Range Selection -->
+              <div class="mb-6">
+                <h3 class="text-lg font-semibold mb-3">Date Range</h3>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-3">
+                  <div>
+                    <label class="block text-sm font-medium mb-1">Start Date</label>
+                    <input type="date" id="backfill-start-date" class="bg-gray-700 border border-gray-600 text-white text-sm rounded-lg focus:ring-cyan-500 focus:border-cyan-500 block w-full p-2.5" />
+                  </div>
+                  <div>
+                    <label class="block text-sm font-medium mb-1">End Date</label>
+                    <input type="date" id="backfill-end-date" class="bg-gray-700 border border-gray-600 text-white text-sm rounded-lg focus:ring-cyan-500 focus:border-cyan-500 block w-full p-2.5" />
+                  </div>
+                </div>
+                
+                <!-- Preset Buttons -->
+                <div class="flex gap-2 flex-wrap">
+                  <button id="preset-last-7" class="bg-gray-600 hover:bg-gray-700 text-white font-bold py-2 px-4 rounded-lg">Last 7 Days</button>
+                  <button id="preset-last-30" class="bg-gray-600 hover:bg-gray-700 text-white font-bold py-2 px-4 rounded-lg">Last 30 Days</button>
+                  <button id="preset-last-90" class="bg-gray-600 hover:bg-gray-700 text-white font-bold py-2 px-4 rounded-lg">Last 90 Days</button>
+                  <button id="preset-last-year" class="bg-gray-600 hover:bg-gray-700 text-white font-bold py-2 px-4 rounded-lg">Last Year</button>
+                </div>
+              </div>
+              
+              <!-- Symbol Selection -->
+              <div class="mb-6">
+                <h3 class="text-lg font-semibold mb-3">Symbols</h3>
+                <div class="mb-2">
+                  <label class="inline-flex items-center">
+                    <input type="checkbox" id="select-all-symbols" checked class="mr-2" />
+                    <span>All Symbols</span>
+                  </label>
+                </div>
+                <div id="backfill-symbol-checkboxes" class="grid grid-cols-2 md:grid-cols-3 gap-2">
+                  <!-- Dynamically populated -->
+                </div>
+              </div>
+              
+              <!-- Options -->
+              <div class="mb-6">
+                <h3 class="text-lg font-semibold mb-3">Options</h3>
+                <label class="inline-flex items-center">
+                  <input type="checkbox" id="store-minute-bars" class="mr-2" />
+                  <span>Store minute bar data (for analytics)</span>
+                </label>
+                <p class="text-sm text-gray-400 mt-1">
+                  Stores raw minute-level price data. Useful for custom analytics but increases storage.
+                </p>
+              </div>
+              
+              <!-- Job Name -->
+              <div class="mb-6">
+                <label class="block text-sm font-medium mb-1">Job Name (Optional)</label>
+                <input type="text" id="backfill-job-name" class="bg-gray-700 border border-gray-600 text-white text-sm rounded-lg focus:ring-cyan-500 focus:border-cyan-500 block w-full p-2.5" placeholder="e.g., Q4 2024 Backfill" />
+              </div>
+              
+              <!-- Estimate -->
+              <div class="bg-blue-900 bg-opacity-30 border border-blue-500 rounded-lg p-3 mb-6">
+                <p class="text-sm">
+                  <strong>Estimated Time:</strong> <span id="backfill-estimate">Select date range to see estimate</span>
+                </p>
+                <p class="text-xs text-gray-400 mt-1">
+                  Based on Polygon API rate limits. Free tier: 5 requests/min. Paid tier: 100 requests/min.
+                </p>
+              </div>
+              
+              <!-- Start Button -->
+              <button id="start-backfill" class="w-full bg-cyan-600 hover:bg-cyan-700 text-white font-bold py-3 px-4 rounded-lg">
+                Start Backfill
+              </button>
+            </div>
+            
+            <!-- Progress Display -->
+            <div id="backfill-progress-card" class="bg-gray-800 p-6 rounded-lg shadow-lg mb-6" style="display:none;">
+              <h2 class="text-2xl font-bold mb-4">Backfill Progress</h2>
+              
+              <div class="mb-4">
+                <div class="flex justify-between text-sm mb-1">
+                  <span id="progress-text">0 / 0 days completed</span>
+                  <span id="progress-percentage">0%</span>
+                </div>
+                <div class="w-full bg-gray-700 rounded-full h-4">
+                  <div id="progress-fill" class="bg-green-500 h-4 rounded-full transition-all duration-300" style="width: 0%;"></div>
+                </div>
+              </div>
+              
+              <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
+                <div class="bg-gray-700 p-3 rounded-lg">
+                  <div class="text-sm text-gray-400">Status</div>
+                  <div id="progress-status" class="text-lg font-semibold">Running...</div>
+                </div>
+                <div class="bg-gray-700 p-3 rounded-lg">
+                  <div class="text-sm text-gray-400">Completed</div>
+                  <div id="progress-completed" class="text-lg font-semibold text-green-400">0</div>
+                </div>
+                <div class="bg-gray-700 p-3 rounded-lg">
+                  <div class="text-sm text-gray-400">Failed</div>
+                  <div id="progress-failed" class="text-lg font-semibold text-red-400">0</div>
+                </div>
+                <div class="bg-gray-700 p-3 rounded-lg">
+                  <div class="text-sm text-gray-400">Baselines</div>
+                  <div id="progress-baselines" class="text-lg font-semibold text-blue-400">0</div>
+                </div>
+              </div>
+              
+              <!-- Recent Errors -->
+              <div id="backfill-errors" style="display:none;">
+                <h3 class="text-lg font-medium mb-2 text-red-400">Recent Errors</h3>
+                <div class="bg-red-900 bg-opacity-20 border border-red-500 rounded-lg p-3 max-h-48 overflow-y-auto">
+                  <ul id="error-list" class="text-sm space-y-1">
+                    <!-- Dynamically populated -->
+                  </ul>
+                </div>
+              </div>
+              
+              <div class="flex gap-2 mt-4">
+                <button id="refresh-progress" class="flex-1 bg-gray-600 hover:bg-gray-700 text-white font-bold py-2 px-4 rounded-lg">
+                  Refresh Progress
+                </button>
+                <button id="cancel-backfill" class="flex-1 bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-4 rounded-lg">
+                  Cancel Job
+                </button>
+              </div>
+            </div>
+            
+            <!-- Job History -->
+            <div class="bg-gray-800 p-6 rounded-lg shadow-lg">
+              <h2 class="text-2xl font-bold mb-4">Recent Backfill Jobs</h2>
+              
+              <div class="overflow-x-auto">
+                <table class="w-full text-sm text-left hide-baseline-columns">
+                  <thead class="text-xs uppercase bg-gray-700">
+                    <tr>
+                      <th class="px-4 py-3">Job Name</th>
+                      <th class="px-4 py-3">Date Range</th>
+                      <th class="px-4 py-3">Symbols</th>
+                      <th class="px-4 py-3">Status</th>
+                      <th class="px-4 py-3">Progress</th>
+                      <th class="px-4 py-3">Baselines</th>
+                      <th class="px-4 py-3">Started</th>
+                      <th class="px-4 py-3">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody id="backfill-jobs-table">
+                    <tr>
+                      <td colspan="8" class="px-4 py-3 text-center text-gray-400">No backfill jobs yet</td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+</body>
+</html>
+
+          
