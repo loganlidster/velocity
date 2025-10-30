@@ -33,4 +33,4 @@ jobs:
         run: |
           echo "$GOOGLE_APPLICATION_CREDENTIALS_JSON" > $HOME/gcloud-key.json
           export GOOGLE_APPLICATION_CREDENTIALS=$HOME/gcloud-key.json
-          firebase deploy --only functions,hosting --project trade-socket --non-interactive
+          firebase deploy --only functions --project trade-socket --non-interactive
