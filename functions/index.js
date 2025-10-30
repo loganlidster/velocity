@@ -4294,3 +4294,405 @@ exports.getAccountSnapshot = onCall({ cors: true }, async (request) => {
     client.release();
   }
 });
+
+
+// ============================================================================
+// V1.1 EVENT-DRIVEN BIDDING SYSTEM
+// ============================================================================
+
+// Order state tracking (in-memory)
+const orderState = new Map();
+
+// BTC price cache
+let lastBTCPrice = null;
+let lastBTCUpdate = 0;
+
+/**
+ * Get BTC price with 5-second caching
+ */
+async function getCachedBTCPrice(client, userId, walletId, polygonKey) {
+  const now = Date.now();
+  if (lastBTCPrice && (now - lastBTCUpdate) < 5000) {
+    return lastBTCPrice;
+  }
+  
+  lastBTCPrice = await getBTCPrice(client, userId, walletId, polygonKey);
+  lastBTCUpdate = now;
+  return lastBTCPrice;
+}
+
+/**
+ * Calculate strike ratios for the day (fixed values)
+ */
+function calculateStrikeRatios(baseline, buyPct, sellPct) {
+  const buyMultiplier = 1 + (buyPct / 100);
+  const sellMultiplier = 1 - (sellPct / 100);
+  
+  return {
+    buyStrike: baseline * buyMultiplier,
+    sellStrike: baseline * sellMultiplier
+  };
+}
+
+/**
+ * Determine trading signal based on current ratio
+ */
+function determineSignal(currentRatio, buyStrike, sellStrike) {
+  if (currentRatio > buyStrike) return 'BUY';
+  if (currentRatio < sellStrike) return 'SELL';
+  return 'HOLD';
+}
+
+/**
+ * Check if order is within posting threshold
+ */
+function isWithinThreshold(ourPrice, marketPrice) {
+  const threshold = Math.min(marketPrice * 0.10, 0.50);
+  return Math.abs(ourPrice - marketPrice) <= threshold;
+}
+
+/**
+ * Check if symbol is in cooldown period
+ */
+function inCooldown(symbol) {
+  const state = orderState.get(symbol);
+  if (!state || !state.lastFillTime) return false;
+  
+  const elapsed = Date.now() - state.lastFillTime;
+  return elapsed < 60000; // 60 seconds
+}
+
+/**
+ * Update order state after fill
+ */
+function recordOrderFill(symbol) {
+  const state = orderState.get(symbol) || {};
+  state.lastFillTime = Date.now();
+  orderState.set(symbol, state);
+}
+
+/**
+ * V1.1 Execute Wallet - Event-Driven Bidding
+ */
+async function executeWallet(userId, walletId) {
+  const pool = await getPool();
+  const client = await pool.connect();
+  
+  try {
+    console.log(`\n========================================`);
+    console.log(`Executing wallet: ${walletId} (V1.1 Event-Driven)`);
+    console.log(`========================================`);
+    
+    // Get wallet info
+    const walletResult = await client.query(
+      `SELECT * FROM wallets WHERE wallet_id = $1 AND user_id = $2`,
+      [walletId, userId]
+    );
+    
+    if (walletResult.rows.length === 0) {
+      throw new Error('Wallet not found');
+    }
+    
+    const wallet = walletResult.rows[0];
+    
+    // Check if enabled
+    const settingsResult = await client.query(
+      `SELECT enabled FROM wallets WHERE wallet_id = $1`,
+      [walletId]
+    );
+    
+    if (settingsResult.rows.length === 0 || !settingsResult.rows[0].enabled) {
+      console.log('Wallet is disabled, skipping execution');
+      return { success: true, message: 'Wallet disabled' };
+    }
+    
+    console.log('Wallet is enabled, proceeding with execution');
+    
+    // Get API keys
+    const { env, alpacaKey, alpacaSecret } = await getWalletEnvAndKeys(client, walletId, userId);
+    
+    const keysResult = await client.query(
+      `SELECT polygon_key FROM user_api_keys WHERE user_id = $1`,
+      [userId]
+    );
+    
+    if (keysResult.rows.length === 0 || !keysResult.rows[0].polygon_key) {
+      throw new Error('Polygon API key not found');
+    }
+    
+    const polygon_key = keysResult.rows[0].polygon_key;
+    
+    // Get BTC price (cached for 5 seconds)
+    console.log('Fetching BTC price...');
+    const btcPrice = await getCachedBTCPrice(client, userId, walletId, polygon_key);
+    console.log(`BTC Price: $${btcPrice.toFixed(2)}`);
+    
+    // Get positions
+    console.log('Fetching Alpaca positions...');
+    const positions = await getAlpacaPositions(client, userId, walletId, alpacaKey, alpacaSecret, env);
+    console.log(`Found ${Object.keys(positions).length} positions`);
+    
+    // Get account info
+    console.log('Fetching account cash...');
+    const accountCash = await getAccountCash(client, userId, walletId, alpacaKey, alpacaSecret, env);
+    console.log(`Account Cash: $${accountCash.toFixed(2)}`);
+    
+    const baseUrl = env === 'paper' ? 'https://paper-api.alpaca.markets' : 'https://api.alpaca.markets';
+    const accountResponse = await fetch(`${baseUrl}/v2/account`, {
+      method: 'GET',
+      headers: {
+        'APCA-API-KEY-ID': alpacaKey,
+        'APCA-API-SECRET-KEY': alpacaSecret
+      }
+    });
+    const accountData = await accountResponse.json();
+    const accountEquity = parseFloat(accountData.equity || 0);
+    console.log(`Account Equity: $${accountEquity.toFixed(2)}`);
+    
+    // Get enabled symbols with baselines
+    const symbolsResult = await client.query(
+      `SELECT ws.*, 
+              bd_rth.baseline as rth_baseline,
+              bd_ah.baseline as ah_baseline
+       FROM wallet_symbols ws
+       LEFT JOIN baseline_daily bd_rth ON ws.symbol = bd_rth.symbol 
+         AND ws.method_rth = bd_rth.method 
+         AND bd_rth.session = 'RTH'
+         AND bd_rth.trading_day = (SELECT MAX(trading_day) FROM baseline_daily WHERE symbol = ws.symbol AND session = 'RTH')
+       LEFT JOIN baseline_daily bd_ah ON ws.symbol = bd_ah.symbol 
+         AND ws.method_ah = bd_ah.method 
+         AND bd_ah.session = 'AH'
+         AND bd_ah.trading_day = (SELECT MAX(trading_day) FROM baseline_daily WHERE symbol = ws.symbol AND session = 'AH')
+       WHERE ws.wallet_id = $1 AND ws.enabled = true`,
+      [walletId]
+    );
+    
+    console.log(`Found ${symbolsResult.rows.length} enabled symbols`);
+    
+    // Determine current session
+    const now = new Date();
+    const etHour = now.getUTCHours() - 5; // Convert to ET
+    const isRTH = etHour >= 9 && etHour < 16;
+    const currentSession = isRTH ? 'RTH' : 'AH';
+    
+    console.log(`Current session: ${currentSession}`);
+    
+    // Process each symbol
+    const results = [];
+    
+    for (const symbolData of symbolsResult.rows) {
+      try {
+        console.log(`\n--- Processing ${symbolData.symbol} ---`);
+        
+        // Get baseline for current session
+        const baseline = isRTH ? symbolData.rth_baseline : symbolData.ah_baseline;
+        const baselineMethod = isRTH ? symbolData.method_rth : symbolData.method_ah;
+        const buyPct = parseFloat(isRTH ? (symbolData.buy_pct_rth || 1.0) : (symbolData.buy_pct_ah || 1.0));
+        const sellPct = parseFloat(isRTH ? (symbolData.sell_pct_rth || 2.0) : (symbolData.sell_pct_ah || 2.0));
+        
+        if (!baseline) {
+          console.log(`No ${currentSession} baseline found for ${symbolData.symbol}, skipping`);
+          continue;
+        }
+        
+        // Calculate strike ratios (fixed for the day)
+        const { buyStrike, sellStrike } = calculateStrikeRatios(parseFloat(baseline), buyPct, sellPct);
+        
+        console.log(`Baseline: ${baseline}, Buy Strike: ${buyStrike.toFixed(2)}, Sell Strike: ${sellStrike.toFixed(2)}`);
+        
+        // Get current stock price
+        const position = positions[symbolData.symbol];
+        const stockPrice = position ? position.current_price : null;
+        
+        if (!stockPrice) {
+          console.log(`No stock price available for ${symbolData.symbol}, skipping`);
+          continue;
+        }
+        
+        // Calculate current ratio
+        const currentRatio = btcPrice / stockPrice;
+        
+        // Determine signal
+        const signal = determineSignal(currentRatio, buyStrike, sellStrike);
+        
+        console.log(`Stock Price: $${stockPrice.toFixed(2)}, Current Ratio: ${currentRatio.toFixed(2)}, Signal: ${signal}`);
+        
+        // Calculate bid/ask prices
+        const buyPrice = parseFloat((btcPrice / buyStrike).toFixed(4));
+        const sellPrice = parseFloat((btcPrice / sellStrike).toFixed(4));
+        
+        console.log(`Buy Price: $${buyPrice.toFixed(4)}, Sell Price: $${sellPrice.toFixed(4)}`);
+        
+        // Get current order state
+        const state = orderState.get(symbolData.symbol) || {
+          lastPrice: null,
+          lastSide: null,
+          orderId: null,
+          lastUpdateTime: null,
+          lastFillTime: null
+        };
+        
+        // Check cooldown
+        if (inCooldown(symbolData.symbol)) {
+          console.log(`${symbolData.symbol} in cooldown, skipping`);
+          continue;
+        }
+        
+        // Determine which side to trade
+        const hasShares = position && position.qty > 0;
+        const hasBudget = accountCash > 100; // Simplified budget check
+        
+        let targetSide = null;
+        let targetPrice = null;
+        
+        if (signal === 'HOLD' && hasShares) {
+          // HOLD with shares → post sell order
+          targetSide = 'sell';
+          targetPrice = sellPrice;
+        } else if (signal === 'BUY' && hasBudget) {
+          // BUY signal with budget → post buy order
+          targetSide = 'buy';
+          targetPrice = buyPrice;
+        } else if (signal === 'SELL' && hasShares) {
+          // SELL signal with shares → post sell order
+          targetSide = 'sell';
+          targetPrice = sellPrice;
+        }
+        
+        if (!targetSide) {
+          console.log(`No action needed for ${symbolData.symbol}`);
+          continue;
+        }
+        
+        console.log(`Target: ${targetSide.toUpperCase()} at $${targetPrice.toFixed(4)}`);
+        
+        // Check if price changed by at least $0.01
+        if (state.lastPrice && Math.abs(targetPrice - state.lastPrice) < 0.01) {
+          console.log(`Price change < $0.01, keeping existing order`);
+          continue;
+        }
+        
+        // Check threshold
+        if (!isWithinThreshold(targetPrice, stockPrice)) {
+          console.log(`Price outside threshold, canceling order if exists`);
+          if (state.orderId) {
+            await cancelOrder(client, userId, walletId, state.orderId, alpacaKey, alpacaSecret, env);
+            orderState.set(symbolData.symbol, { ...state, orderId: null, lastPrice: null });
+          }
+          continue;
+        }
+        
+        // Cancel existing order if exists
+        if (state.orderId) {
+          console.log(`Canceling existing order: ${state.orderId}`);
+          await cancelOrder(client, userId, walletId, state.orderId, alpacaKey, alpacaSecret, env);
+        }
+        
+        // Calculate quantity
+        const qty = targetSide === 'buy' 
+          ? Math.floor(Math.min(accountCash, 1000) / targetPrice) // Simplified qty calc
+          : position.qty;
+        
+        if (qty === 0) {
+          console.log(`Quantity is 0, skipping order`);
+          continue;
+        }
+        
+        // Post new order
+        console.log(`Posting ${targetSide.toUpperCase()} order: ${qty} shares at $${targetPrice.toFixed(4)}`);
+        
+        const order = await placeLimitOrder(
+          client, userId, walletId,
+          symbolData.symbol, targetSide, qty, targetPrice,
+          alpacaKey, alpacaSecret, env
+        );
+        
+        // Update state
+        orderState.set(symbolData.symbol, {
+          lastPrice: targetPrice,
+          lastSide: targetSide,
+          orderId: order.id,
+          lastUpdateTime: Date.now(),
+          lastFillTime: state.lastFillTime
+        });
+        
+        console.log(`✅ Order posted successfully: ${order.id}`);
+        
+        results.push({
+          symbol: symbolData.symbol,
+          signal,
+          side: targetSide,
+          price: targetPrice,
+          qty,
+          orderId: order.id
+        });
+        
+      } catch (error) {
+        console.error(`Error processing ${symbolData.symbol}:`, error.message);
+      }
+    }
+    
+    return {
+      success: true,
+      results,
+      btcPrice,
+      session: currentSession
+    };
+    
+  } catch (error) {
+    console.error('Error in executeWallet:', error);
+    throw error;
+  } finally {
+    client.release();
+  }
+}
+
+
+
+// ============================================================================
+// REAL-TIME EXECUTION SCHEDULER (Every 5 seconds)
+// ============================================================================
+
+/**
+ * Scheduled function that executes all enabled wallets every 5 seconds
+ * This replaces the old 1-minute polling system
+ */
+exports.executeWalletsRealtime = onSchedule(
+  {
+    schedule: "every 5 seconds",
+    timeZone: "America/New_York",
+    secrets: ["pg-appuser-password"],
+  },
+  async (event) => {
+    console.log("\n=== REAL-TIME EXECUTION (5-second cycle) ===");
+    console.log("Time:", new Date().toISOString());
+    
+    const pool = await getPool();
+    const client = await pool.connect();
+    
+    try {
+      // Get all enabled wallets
+      const result = await client.query(
+        `SELECT wallet_id, user_id FROM wallets WHERE enabled = true`
+      );
+      
+      console.log(`Found ${result.rows.length} enabled wallets`);
+      
+      // Execute each wallet
+      for (const wallet of result.rows) {
+        try {
+          await executeWallet(wallet.user_id, wallet.wallet_id);
+        } catch (error) {
+          console.error(`Error executing wallet ${wallet.wallet_id}:`, error.message);
+        }
+      }
+      
+      console.log("=== Real-time execution complete ===\n");
+      
+    } catch (error) {
+      console.error("Error in executeWalletsRealtime:", error);
+    } finally {
+      client.release();
+    }
+  }
+);

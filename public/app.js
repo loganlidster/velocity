@@ -10,12 +10,12 @@ import { getFunctions, httpsCallable as httpsCallableImport } from "https://www.
 
 // Firebase config (your project)
 const firebaseConfig = {
-  apiKey: "AIzaSyBXN8_wZ9vQZ9Z9Z9Z9Z9Z9Z9Z9Z9Z9Z9Z",
+  apiKey: "AIzaSyAJHujG0WiDj_4xN2KCHZL9A_GOE8TsC_k",
   authDomain: "trade-socket.firebaseapp.com",
   projectId: "trade-socket",
-  storageBucket: "trade-socket.appspot.com",
+  storageBucket: "trade-socket.firebasestorage.app",
   messagingSenderId: "99661261931",
-  appId: "1:99661261931:web:abcdef123456"
+  appId: "1:99661261931:web:9ff05e4fda848bb077d52e"
 };
 
 document.addEventListener("DOMContentLoaded", () => {
