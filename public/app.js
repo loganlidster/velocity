@@ -316,9 +316,10 @@ document.addEventListener("DOMContentLoaded", () => {
   async function loadWalletsIntoSelect() {
     if (!currentUserId) return;
     try {
-      const fn = window.httpsCallable(window.functions, "listWallets");
-      const result = await fn();
-      walletsCache = result.data.wallets || [];
+      // Use Vercel API instead of Firebase Functions
+      const response = await fetch('/api/list-wallets');
+      const result = await response.json();
+      walletsCache = result.wallets || [];
       const sel = document.getElementById("wallet-select");
       if (!sel) return;
       if (!walletsCache.length) {
@@ -920,9 +921,10 @@ document.addEventListener("DOMContentLoaded", () => {
     if (!walletsListDiv) return;
     walletsListDiv.innerHTML = "<p class='text-gray-400'>Loading...</p>";
     try {
-      const fn = window.httpsCallable(window.functions, "listWallets");
-      const result = await fn();
-      const wallets = result.data.wallets || [];
+      // Use Vercel API instead of Firebase Functions
+      const response = await fetch('/api/list-wallets');
+      const result = await response.json();
+      const wallets = result.wallets || [];
       if (!wallets.length) {
         walletsListDiv.innerHTML = "<p class='text-gray-400'>No wallets yet.</p>";
         return;
