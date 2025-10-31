@@ -356,7 +356,7 @@ document.addEventListener("DOMContentLoaded", () => {
     if (!walletId) return;
     try {
       // Use Vercel API
-      const response = await fetch("/api/list-wallets"); const result = await response.json();
+      const response = await fetch("https://velocity-98i3ssvvq-logans-projects-57bfdedc.vercel.app/api/list-wallets"); const result = await response.json();
       const wallet = (result.wallets || []).find(w => w.wallet_id === walletId);
       if (!wallet) return;
       if (runLoopToggle) runLoopToggle.checked = !!wallet.enabled;
