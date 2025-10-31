@@ -375,7 +375,7 @@ document.addEventListener("DOMContentLoaded", () => {
     if (snapPositionsEl) snapPositionsEl.textContent = "Loading...";
     if (snapCashEl) snapCashEl.textContent = "Loading...";
     try {
-      const fn = window.httpsCallable(window.functions, "getWalletSnapshot");
+      const response = await fetch(`/api/get-wallet-snapshot?wallet_id=${selectedWalletId}`);
       const result = await fn({ walletId: window.selectedWalletId });
       // Backend returns { success: true, snapshot: { equity, positionsValue, cash, ... } }
       const snapshot = result.data.snapshot || result.data;
@@ -442,8 +442,8 @@ document.addEventListener("DOMContentLoaded", () => {
   async function loadBaselinesForWallet(walletId) {
     if (!walletId) return;
     try {
-      const fn = window.httpsCallable(window.functions, "getWalletBaselines");
-      const result = await fn({ walletId });
+      const response = await fetch(`/api/get-wallet-baselines?wallet_id=${walletId}`);
+      const result = await response.json();
       baselinesCache = result.data.baselines || {};
       
       // Update status display
@@ -594,9 +594,9 @@ document.addEventListener("DOMContentLoaded", () => {
   async function loadSymbolsForWallet(walletId) {
     if (!walletId) return;
     try {
-      const fn = window.httpsCallable(window.functions, "listWalletSymbols");
-      const result = await fn({ walletId });
-      symbolsCache = result.data.symbols || [];
+      const response = await fetch(`/api/list-wallet-symbols?wallet_id=${walletId}`);
+      const result = await response.json();
+      symbolsCache = result.symbols || [];
       if (window.innerWidth >= 768) renderSymbolsTable();
       else renderSymbolsCards();
     } catch (e) {
@@ -1077,9 +1077,9 @@ async function loadBackfillSymbols() {
   if (!window.selectedWalletId) return;
   
   try {
-    const fn = window.httpsCallable(window.functions, "listWalletSymbols");
+    const response = await fetch(`/api/list-wallet-symbols?wallet_id=${walletId}`);
     const result = await fn({ walletId: window.selectedWalletId });
-    const symbols = result.data.symbols || [];
+    const symbols = result.symbols || [];
     
     const container = document.getElementById('backfill-symbol-checkboxes');
     if (!container) return;
