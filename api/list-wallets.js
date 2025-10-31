@@ -21,9 +21,11 @@ module.exports = async (req, res) => {
       database: 'tradiac_v2',
       user: 'appuser',
       password: 'Fu3lth3j3t!',
-      ssl: false,
+      ssl: {
+        rejectUnauthorized: false
+      },
       max: 5,
-      connectionTimeoutMillis: 5000
+      connectionTimeoutMillis: 10000
     });
     
     client = await pool.connect();
