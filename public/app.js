@@ -1496,16 +1496,16 @@ async function refreshDashboard() {
     updateLastRefreshTime('Refreshing...');
     
     // Call backend function
-    const getDashboardData = window.httpsCallable(window.functions, 'getDashboardData');
-    const result = await getDashboardData({ walletId });
+    const response = await fetch(`https://velocity-98i3ssvvq-logans-projects-57bfdedc.vercel.app/api/get-dashboard-data?wallet_id=${walletId}`);
+    const result = await response.json();
     
-    if (result.data.success) {
-      lastDashboardData = result.data;
-      renderDashboard(result.data);
+    if (result.success) {
+      lastDashboardData = result;
+      renderDashboard(result);
       updateLastRefreshTime('Just now');
       console.log('[Dashboard] Data refreshed successfully');
     } else {
-      throw new Error(result.data.message || 'Failed to fetch dashboard data');
+      throw new Error(result.error || 'Failed to fetch dashboard data');
     }
     
   } catch (error) {
