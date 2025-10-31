@@ -49,8 +49,59 @@ module.exports = async (req, res) => {
       SELECT * FROM wallet_symbols WHERE wallet_id = $1 AND enabled = true
     `, [walletId]);
     
-    // For now, return basic dashboard data
-    // This would normally include positions, P&L, etc.
+    // Get API keys for this wallet
+    const keysResult = await client.query(`
+      SELECT * FROM wallet_api_keys WHERE wallet_id = $1
+    `, [walletId]);
+    
+    let accountData = null;
+    let btcPrice = null;
+    
+    // Fetch account data from Alpaca if keys exist
+    if (keysResult.rows.length > 0) {
+      const keys = keysResult.rows[0];
+      const alpacaKey = wallet.env === 'paper' ? keys.alpaca_paper_key : keys.alpaca_live_key;
+      const alpacaSecret = wallet.env === 'paper' ? keys.alpaca_paper_secret : keys.alpaca_live_secret;
+      
+      if (alpacaKey && alpacaSecret) {
+        try {
+          const alpacaBaseUrl = wallet.env === 'paper' 
+            ? 'https://paper-api.alpaca.markets'
+            : 'https://api.alpaca.markets';
+          
+          // Get account info
+          const accountResponse = await fetch(`${alpacaBaseUrl}/v2/account`, {
+            headers: {
+              'APCA-API-KEY-ID': alpacaKey,
+              'APCA-API-SECRET-KEY': alpacaSecret
+            }
+          });
+          
+          if (accountResponse.ok) {
+            accountData = await accountResponse.json();
+          }
+        } catch (error) {
+          console.error('Error fetching Alpaca data:', error);
+        }
+      }
+      
+      // Fetch BTC price from Polygon
+      if (keys.polygon_key) {
+        try {
+          const btcResponse = await fetch(
+            `https://api.polygon.io/v2/last/trade/X:BTCUSD?apiKey=${keys.polygon_key}`
+          );
+          
+          if (btcResponse.ok) {
+            const btcData = await btcResponse.json();
+            btcPrice = btcData.results?.p || null;
+          }
+        } catch (error) {
+          console.error('Error fetching BTC price:', error);
+        }
+      }
+    }
+    
     const dashboardData = {
       success: true,
       wallet: {
@@ -61,13 +112,18 @@ module.exports = async (req, res) => {
       },
       symbols: symbolsResult.rows,
       positions: [],
-      account: {
+      account: accountData ? {
+        cash: parseFloat(accountData.cash || 0),
+        equity: parseFloat(accountData.equity || 0),
+        buying_power: parseFloat(accountData.buying_power || 0)
+      } : {
         cash: 0,
         equity: 0,
         buying_power: 0
       },
+      btc_price: btcPrice,
       performance: {
-        daily_pnl: 0,
+        daily_pnl: accountData ? parseFloat(accountData.equity) - parseFloat(accountData.last_equity) : 0,
         total_pnl: 0,
         daily_return: 0,
         total_return: 0
