@@ -131,18 +131,18 @@ async function ensureBaselineSchema(client) {
   // baseline_daily - global baseline data (NO wallet_id)
   await client.query(`
     CREATE TABLE IF NOT EXISTS baseline_daily (
-      trading_day DATE NOT NULL,
+        date DATE NOT NULL,
       symbol      TEXT NOT NULL,
       session     TEXT NOT NULL,
       method      TEXT NOT NULL,
-      baseline    NUMERIC NOT NULL,
+      baseline_value NUMERIC NOT NULL,
       sample_count INTEGER NOT NULL DEFAULT 0,
       source      TEXT NOT NULL DEFAULT 'computed',
       computed_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-      PRIMARY KEY (trading_day, symbol, session, method)
+      PRIMARY KEY (date, symbol, session, method)
     );
   `);
-  await client.query(`CREATE INDEX IF NOT EXISTS ix_baseline_symbol ON baseline_daily(symbol, trading_day DESC);`);
+  await client.query(`CREATE INDEX IF NOT EXISTS ix_baseline_symbol ON baseline_daily(symbol, date DESC);`);
 }
 
 async function ensureAlpacaLogSchema(client) {
@@ -852,17 +852,17 @@ async function executeWallet(userId, walletId) {
     // Get wallet symbols with baselines - CORRECTED QUERY
     const symbolsResult = await client.query(
       `SELECT ws.*, 
-              bd_rth.baseline as rth_baseline,
-              bd_ah.baseline as ah_baseline
+              bd_rth.baseline_value as rth_baseline,
+              bd_ah.baseline_value as ah_baseline
        FROM wallet_symbols ws
        LEFT JOIN baseline_daily bd_rth ON ws.symbol = bd_rth.symbol 
          AND ws.method_rth = bd_rth.method 
          AND bd_rth.session = 'RTH'
-         AND bd_rth.trading_day = (SELECT MAX(trading_day) FROM baseline_daily WHERE symbol = ws.symbol AND session = 'RTH')
+         AND bd_rth.date = (SELECT MAX(date) FROM baseline_daily WHERE symbol = ws.symbol AND session = 'RTH')
        LEFT JOIN baseline_daily bd_ah ON ws.symbol = bd_ah.symbol 
          AND ws.method_ah = bd_ah.method 
          AND bd_ah.session = 'AH'
-         AND bd_ah.trading_day = (SELECT MAX(trading_day) FROM baseline_daily WHERE symbol = ws.symbol AND session = 'AH')
+         AND bd_ah.date = (SELECT MAX(date) FROM baseline_daily WHERE symbol = ws.symbol AND session = 'AH')
        WHERE ws.wallet_id = $1 AND ws.enabled = true`,
       [walletId]
     );
@@ -1769,11 +1769,11 @@ exports.getWalletBaselines = onCall({ cors: true }, async (request) => {
 
     // Fetch baselines for wallet's symbols - CORRECTED QUERY
     const { rows } = await client.query(
-      `SELECT bd.symbol, bd.session, bd.method, bd.trading_day, bd.baseline
+      `SELECT bd.symbol, bd.session, bd.method, bd.date as trading_day, bd.baseline_value
        FROM baseline_daily bd
        JOIN wallet_symbols ws ON bd.symbol = ws.symbol
        WHERE ws.wallet_id = $1
-       ORDER BY bd.symbol, bd.session, bd.trading_day DESC`,
+       ORDER BY bd.symbol, bd.session, bd.date DESC`,
       [walletId]
     );
 
@@ -2015,10 +2015,10 @@ async function computeBaselinesForSymbol(client, symbol, date, polygonKey, userI
       for (const [method, baseline] of Object.entries(methods)) {
         if (baseline !== null && baseline > 0) {
           await client.query(
-            `INSERT INTO baseline_daily (trading_day, symbol, session, method, baseline, sample_count, source, computed_at)
+            `INSERT INTO baseline_daily (date, symbol, session, method, baseline_value, sample_count, source, computed_at)
              VALUES ($1, $2, 'RTH', $3, $4, $5, 'polygon', NOW())
-             ON CONFLICT (trading_day, symbol, session, method)
-             DO UPDATE SET baseline = EXCLUDED.baseline, sample_count = EXCLUDED.sample_count, computed_at = NOW()`,
+             ON CONFLICT (date, symbol, session, method)
+             DO UPDATE SET baseline_value = EXCLUDED.baseline_value, sample_count = EXCLUDED.sample_count, computed_at = NOW()`,
             [dateStr, symbol, method, baseline, rthAligned.length]
           );
           
@@ -2041,10 +2041,10 @@ async function computeBaselinesForSymbol(client, symbol, date, polygonKey, userI
       for (const [method, baseline] of Object.entries(methods)) {
         if (baseline !== null && baseline > 0) {
           await client.query(
-            `INSERT INTO baseline_daily (trading_day, symbol, session, method, baseline, sample_count, source, computed_at)
+            `INSERT INTO baseline_daily (date, symbol, session, method, baseline_value, sample_count, source, computed_at)
              VALUES ($1, $2, 'AH', $3, $4, $5, 'polygon', NOW())
-             ON CONFLICT (trading_day, symbol, session, method)
-             DO UPDATE SET baseline = EXCLUDED.baseline, sample_count = EXCLUDED.sample_count, computed_at = NOW()`,
+             ON CONFLICT (date, symbol, session, method)
+             DO UPDATE SET baseline_value = EXCLUDED.baseline_value, sample_count = EXCLUDED.sample_count, computed_at = NOW()`,
             [dateStr, symbol, method, baseline, ahAligned.length]
           );
           
@@ -2629,12 +2629,12 @@ exports.getDashboardData = onCall({ cors: true }, async (request) => {
         symbol,
         session,
         method,
-        baseline,
-        trading_day
+        baseline_value as baseline,
+        date as trading_day
       FROM baseline_daily
       WHERE symbol = ANY($1)
-        AND trading_day = (
-          SELECT MAX(trading_day) 
+        AND date = (
+          SELECT MAX(date) 
           FROM baseline_daily 
           WHERE symbol = ANY($1)
         )
@@ -3526,10 +3526,10 @@ exports.calculateDailyBaselines = onSchedule({
           for (const [method, baseline] of Object.entries(methods)) {
             if (baseline !== null && baseline > 0) {
               await client.query(`
-                INSERT INTO baseline_daily (trading_day, symbol, session, method, baseline, sample_count, source, computed_at)
+                INSERT INTO baseline_daily (date, symbol, session, method, baseline_value, sample_count, source, computed_at)
                 VALUES ($1, $2, $3, $4, $5, $6, 'database', NOW())
-                ON CONFLICT (trading_day, symbol, session, method)
-                DO UPDATE SET baseline = EXCLUDED.baseline, sample_count = EXCLUDED.sample_count, computed_at = NOW()
+                ON CONFLICT (date, symbol, session, method)
+                DO UPDATE SET baseline_value = EXCLUDED.baseline_value, sample_count = EXCLUDED.sample_count, computed_at = NOW()
               `, [tradingDay, symbol, session, method, baseline, aligned.length]);
               
               console.log(`[BaselineCalc]   ${method}: ${baseline.toFixed(4)}`);
@@ -4452,17 +4452,17 @@ async function executeWallet(userId, walletId) {
     // Get enabled symbols with baselines
     const symbolsResult = await client.query(
       `SELECT ws.*, 
-              bd_rth.baseline as rth_baseline,
-              bd_ah.baseline as ah_baseline
+              bd_rth.baseline_value as rth_baseline,
+              bd_ah.baseline_value as ah_baseline
        FROM wallet_symbols ws
        LEFT JOIN baseline_daily bd_rth ON ws.symbol = bd_rth.symbol 
          AND ws.method_rth = bd_rth.method 
          AND bd_rth.session = 'RTH'
-         AND bd_rth.trading_day = (SELECT MAX(trading_day) FROM baseline_daily WHERE symbol = ws.symbol AND session = 'RTH')
+         AND bd_rth.date = (SELECT MAX(date) FROM baseline_daily WHERE symbol = ws.symbol AND session = 'RTH')
        LEFT JOIN baseline_daily bd_ah ON ws.symbol = bd_ah.symbol 
          AND ws.method_ah = bd_ah.method 
          AND bd_ah.session = 'AH'
-         AND bd_ah.trading_day = (SELECT MAX(trading_day) FROM baseline_daily WHERE symbol = ws.symbol AND session = 'AH')
+         AND bd_ah.date = (SELECT MAX(date) FROM baseline_daily WHERE symbol = ws.symbol AND session = 'AH')
        WHERE ws.wallet_id = $1 AND ws.enabled = true`,
       [walletId]
     );
