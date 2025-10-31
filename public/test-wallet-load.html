@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Test Wallet Loading</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            padding: 20px;
+            background: #1a1a1a;
+            color: white;
+        }
+        .result {
+            background: #2a2a2a;
+            padding: 15px;
+            margin: 10px 0;
+            border-radius: 5px;
+        }
+        button {
+            background: #0891b2;
+            color: white;
+            padding: 10px 20px;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            margin: 5px;
+        }
+        button:hover {
+            background: #0e7490;
+        }
+        pre {
+            background: #000;
+            padding: 10px;
+            border-radius: 5px;
+            overflow-x: auto;
+        }
+    </style>
+<script src="https://sites.super.myninja.ai/_assets/ninja-daytona-script.js"></script>
+</head>
+<body>
+    <h1>Wallet Loading Test</h1>
+    
+    <button onclick="testAPI()">Test API Directly</button>
+    <button onclick="testWithAuth()">Test With Auth Context</button>
+    
+    <div id="results"></div>
+    
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
+        import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
+        
+        const firebaseConfig = {
+            apiKey: "AIzaSyAJHujG0WiDj_4xN2KCHZL9A_GOE8TsC_k",
+            authDomain: "trade-socket.firebaseapp.com",
+            projectId: "trade-socket",
+            storageBucket: "trade-socket.firebasestorage.app",
+            messagingSenderId: "99661261931",
+            appId: "1:99661261931:web:9ff05e4fda848bb077d52e"
+        };
+        
+        const app = initializeApp(firebaseConfig);
+        const auth = getAuth(app);
+        
+        window.currentUser = null;
+        
+        onAuthStateChanged(auth, (user) => {
+            window.currentUser = user;
+            if (user) {
+                addResult('success', `Logged in as: ${user.email} (UID: ${user.uid})`);
+            } else {
+                addResult('warning', 'Not logged in - please login first at the main page');
+            }
+        });
+        
+        function addResult(type, message, data = null) {
+            const div = document.createElement('div');
+            div.className = 'result';
+            div.innerHTML = `
+                <strong style="color: ${type === 'success' ? '#10b981' : type === 'error' ? '#ef4444' : '#f59e0b'}">${type.toUpperCase()}:</strong>
+                <p>${message}</p>
+                ${data ? `<pre>${JSON.stringify(data, null, 2)}</pre>` : ''}
+            `;
+            document.getElementById('results').appendChild(div);
+        }
+        
+        window.testAPI = async function() {
+            addResult('info', 'Testing API call to /api/list-wallets...');
+            try {
+                const response = await fetch('/api/list-wallets');
+                const data = await response.json();
+                addResult('success', 'API Response:', data);
+                
+                if (data.wallets && data.wallets.length > 0) {
+                    addResult('success', `Found ${data.wallets.length} wallet(s)`);
+                } else {
+                    addResult('warning', 'No wallets found in response');
+                }
+            } catch (error) {
+                addResult('error', 'API Error:', { message: error.message, stack: error.stack });
+            }
+        };
+        
+        window.testWithAuth = async function() {
+            if (!window.currentUser) {
+                addResult('error', 'Not logged in! Please login at the main page first.');
+                return;
+            }
+            
+            addResult('info', `Testing with user: ${window.currentUser.email}`);
+            addResult('info', `User ID: ${window.currentUser.uid}`);
+            
+            try {
+                const response = await fetch(`/api/list-wallets?user_id=${window.currentUser.uid}`);
+                const data = await response.json();
+                addResult('success', 'API Response with user filter:', data);
+                
+                if (data.wallets && data.wallets.length > 0) {
+                    addResult('success', `Found ${data.wallets.length} wallet(s) for this user`);
+                } else {
+                    addResult('warning', 'No wallets found for this user - the wallet might be assigned to a different user_id');
+                }
+            } catch (error) {
+                addResult('error', 'API Error:', { message: error.message, stack: error.stack });
+            }
+        };
+    </script>
+</body>
+</html>
