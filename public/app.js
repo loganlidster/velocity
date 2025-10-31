@@ -317,7 +317,7 @@ document.addEventListener("DOMContentLoaded", () => {
     if (!currentUserId) return;
     try {
       // Use Vercel API instead of Firebase Functions
-      const response = await fetch('/api/list-wallets');
+      const response = await fetch('https://velocity-98i3ssvvq-logans-projects-57bfdedc.vercel.app/api/list-wallets');
       const result = await response.json();
       walletsCache = result.wallets || [];
       const sel = document.getElementById("wallet-select");
@@ -375,7 +375,7 @@ document.addEventListener("DOMContentLoaded", () => {
     if (snapPositionsEl) snapPositionsEl.textContent = "Loading...";
     if (snapCashEl) snapCashEl.textContent = "Loading...";
     try {
-      const response = await fetch(`/api/get-wallet-snapshot?wallet_id=${selectedWalletId}`);
+      const response = await fetch(`https://velocity-98i3ssvvq-logans-projects-57bfdedc.vercel.app/api/get-wallet-snapshot?wallet_id=${selectedWalletId}`);
       const result = await fn({ walletId: window.selectedWalletId });
       // Backend returns { success: true, snapshot: { equity, positionsValue, cash, ... } }
       const snapshot = result.data.snapshot || result.data;
@@ -442,7 +442,7 @@ document.addEventListener("DOMContentLoaded", () => {
   async function loadBaselinesForWallet(walletId) {
     if (!walletId) return;
     try {
-      const response = await fetch(`/api/get-wallet-baselines?wallet_id=${walletId}`);
+      const response = await fetch(`https://velocity-98i3ssvvq-logans-projects-57bfdedc.vercel.app/api/get-wallet-baselines?wallet_id=${walletId}`);
       const result = await response.json();
       baselinesCache = result.data.baselines || {};
       
@@ -594,7 +594,7 @@ document.addEventListener("DOMContentLoaded", () => {
   async function loadSymbolsForWallet(walletId) {
     if (!walletId) return;
     try {
-      const response = await fetch(`/api/list-wallet-symbols?wallet_id=${walletId}`);
+      const response = await fetch(`https://velocity-98i3ssvvq-logans-projects-57bfdedc.vercel.app/api/list-wallet-symbols?wallet_id=${walletId}`);
       const result = await response.json();
       symbolsCache = result.symbols || [];
       if (window.innerWidth >= 768) renderSymbolsTable();
@@ -922,7 +922,7 @@ document.addEventListener("DOMContentLoaded", () => {
     walletsListDiv.innerHTML = "<p class='text-gray-400'>Loading...</p>";
     try {
       // Use Vercel API instead of Firebase Functions
-      const response = await fetch('/api/list-wallets');
+      const response = await fetch('https://velocity-98i3ssvvq-logans-projects-57bfdedc.vercel.app/api/list-wallets');
       const result = await response.json();
       const wallets = result.wallets || [];
       if (!wallets.length) {
@@ -1077,7 +1077,7 @@ async function loadBackfillSymbols() {
   if (!window.selectedWalletId) return;
   
   try {
-    const response = await fetch(`/api/list-wallet-symbols?wallet_id=${walletId}`);
+    const response = await fetch(`https://velocity-98i3ssvvq-logans-projects-57bfdedc.vercel.app/api/list-wallet-symbols?wallet_id=${walletId}`);
     const result = await fn({ walletId: window.selectedWalletId });
     const symbols = result.symbols || [];
     
@@ -1406,7 +1406,7 @@ let lastDashboardData = null;
          return;
        }
        
-          const response = await fetch('/api/list-wallets');
+          const response = await fetch('https://velocity-98i3ssvvq-logans-projects-57bfdedc.vercel.app/api/list-wallets');
        const result = await response.json();
        
        const walletSelect = document.getElementById('dashboardWalletSelect');
@@ -2174,7 +2174,7 @@ async function populateKPIWalletDropdown() {
   if (!select) return;
 
   try {
-    const response = await fetch('/api/list-wallets');
+    const response = await fetch('https://velocity-98i3ssvvq-logans-projects-57bfdedc.vercel.app/api/list-wallets');
     const result = await response.json();
     const wallets = result.wallets || [];
 
