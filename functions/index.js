@@ -49,7 +49,7 @@ async function getPool() {
     ...clientOpts,
     user: "appuser",
     password: dbPassword,
-    database: "tradiac",
+    database: "tradiac_v2",
     max: 5,
   });
 
