@@ -355,9 +355,9 @@ document.addEventListener("DOMContentLoaded", () => {
   async function loadWalletSettings(walletId) {
     if (!walletId) return;
     try {
-      const fn = window.httpsCallable(window.functions, "listWallets");
-      const result = await fn();
-      const wallet = (result.data.wallets || []).find(w => w.wallet_id === walletId);
+      // Use Vercel API
+      const response = await fetch("/api/list-wallets"); const result = await response.json();
+      const wallet = (result.wallets || []).find(w => w.wallet_id === walletId);
       if (!wallet) return;
       if (runLoopToggle) runLoopToggle.checked = !!wallet.enabled;
       if (tradingWindowSel) tradingWindowSel.value = wallet.trading_window || "RTH";
