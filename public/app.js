@@ -1406,8 +1406,8 @@ let lastDashboardData = null;
          return;
        }
        
-          const listWallets = window.httpsCallable(window.functions, 'listWallets');
-       const result = await listWallets();
+          const response = await fetch('/api/list-wallets');
+       const result = await response.json();
        
        const walletSelect = document.getElementById('dashboardWalletSelect');
        if (!walletSelect) return;
@@ -1415,8 +1415,8 @@ let lastDashboardData = null;
        // Clear existing options except the first one
        walletSelect.innerHTML = '<option value="">Select a wallet...</option>';
        
-       if (result.data && result.data.wallets && result.data.wallets.length > 0) {
-         result.data.wallets.forEach(wallet => {
+       if (result.wallets && result.wallets.length > 0) {
+         result.wallets.forEach(wallet => {
            const option = document.createElement('option');
            option.value = wallet.wallet_id;
            option.textContent = wallet.name;
@@ -1425,19 +1425,19 @@ let lastDashboardData = null;
          
          // Restore previously selected wallet or select first wallet
          const savedWalletId = localStorage.getItem('selectedDashboardWallet');
-         if (savedWalletId && result.data.wallets.find(w => w.wallet_id === savedWalletId)) {
+         if (savedWalletId && result.wallets.find(w => w.wallet_id === savedWalletId)) {
            walletSelect.value = savedWalletId;
            window.selectedWalletId = savedWalletId;
            refreshDashboard();
-         } else if (result.data.wallets.length > 0) {
-           const firstWallet = result.data.wallets[0];
+         } else if (result.wallets.length > 0) {
+           const firstWallet = result.wallets[0];
            walletSelect.value = firstWallet.wallet_id;
            window.selectedWalletId = firstWallet.wallet_id;
            localStorage.setItem('selectedDashboardWallet', firstWallet.wallet_id);
            refreshDashboard();
          }
          
-         console.log('[Dashboard] Loaded', result.data.wallets.length, 'wallets');
+         console.log('[Dashboard] Loaded', result.wallets.length, 'wallets');
        } else {
          console.log('[Dashboard] No wallets found');
        }
@@ -2174,9 +2174,9 @@ async function populateKPIWalletDropdown() {
   if (!select) return;
 
   try {
-    const fn = window.httpsCallable(window.functions, 'listWallets');
-    const result = await fn({});
-    const wallets = result.data.wallets || [];
+    const response = await fetch('/api/list-wallets');
+    const result = await response.json();
+    const wallets = result.wallets || [];
 
     select.innerHTML = '<option value="">Select Wallet...</option>';
     wallets.forEach(w => {
