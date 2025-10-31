@@ -1,18 +1,6 @@
 // Vercel serverless function to list wallets
 const { Pool } = require('pg');
 
-// Create database connection pool
-const getPool = () => {
-  return new Pool({
-    host: '136.117.225.96',
-    database: 'tradiac_v2',
-    user: 'appuser',
-    password: 'Fu3lth3j3t!',
-    ssl: false,
-    max: 5
-  });
-};
-
 module.exports = async (req, res) => {
   // Enable CORS
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -23,11 +11,24 @@ module.exports = async (req, res) => {
     return res.status(200).end();
   }
 
-  const pool = getPool();
-  const client = await pool.connect();
+  let pool;
+  let client;
   
   try {
-    // For now, just return all wallets (we'll add auth later)
+    // Create connection pool
+    pool = new Pool({
+      host: '136.117.225.96',
+      database: 'tradiac_v2',
+      user: 'appuser',
+      password: 'Fu3lth3j3t!',
+      ssl: false,
+      max: 5,
+      connectionTimeoutMillis: 5000
+    });
+    
+    client = await pool.connect();
+    
+    // Query wallets
     const { rows } = await client.query(`
       SELECT wallet_id, user_id, env, name, enabled, created_at, updated_at
       FROM wallets
@@ -35,15 +36,16 @@ module.exports = async (req, res) => {
       ORDER BY created_at DESC
     `);
     
-    res.json({ success: true, wallets: rows });
+    return res.json({ success: true, wallets: rows });
   } catch (error) {
     console.error('Error listing wallets:', error);
-    res.status(500).json({ 
+    return res.status(500).json({ 
       success: false, 
-      error: error.message 
+      error: error.message,
+      stack: error.stack
     });
   } finally {
-    client.release();
-    await pool.end();
+    if (client) client.release();
+    if (pool) await pool.end();
   }
 };
