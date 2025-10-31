@@ -30,15 +30,32 @@ module.exports = async (req, res) => {
     
     client = await pool.connect();
     
-    // Query wallets
-    const { rows } = await client.query(`
-      SELECT wallet_id, user_id, env, name, enabled, created_at, updated_at
-      FROM wallets
-      WHERE enabled = true
-      ORDER BY created_at DESC
-    `);
+    // Get user_id from query parameter (for now, return all wallets if not provided)
+    const userId = req.query.user_id;
     
-    return res.json({ success: true, wallets: rows });
+    let query, params;
+    if (userId) {
+      query = `
+        SELECT wallet_id, user_id, env, name, enabled, created_at, updated_at
+        FROM wallets
+        WHERE enabled = true AND user_id = $1
+        ORDER BY created_at DESC
+      `;
+      params = [userId];
+    } else {
+      // For now, return all wallets if no user_id provided (for testing)
+      query = `
+        SELECT wallet_id, user_id, env, name, enabled, created_at, updated_at
+        FROM wallets
+        WHERE enabled = true
+        ORDER BY created_at DESC
+      `;
+      params = [];
+    }
+    
+    const { rows } = await client.query(query, params);
+    
+    return res.json({ success: true, wallets: rows, user_id: userId });
   } catch (error) {
     console.error('Error listing wallets:', error);
     return res.status(500).json({ 
